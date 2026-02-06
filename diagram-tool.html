@@ -1115,7 +1115,13 @@ function onMouseDown(e) {
     if (lastClickInfo.shapeId === shapeId && now - lastClickInfo.time < 400) {
       lastClickInfo = { time: 0, shapeId: null };
       const shape = shapes.find(s => s.id === shapeId);
-      if (shape) { startTextEdit(shape); return; }
+      if (shape) {
+        e.preventDefault();
+        e.stopPropagation();
+        // delay to let mousedown/mouseup cycle finish, so textarea can properly receive focus
+        setTimeout(() => startTextEdit(shape), 50);
+        return;
+      }
     }
     lastClickInfo = { time: now, shapeId };
 
@@ -1331,38 +1337,51 @@ function startTextEdit(shape) {
   const sw = shape.w / viewBox.w * rect.width;
   const sh = shape.h / viewBox.h * rect.height;
 
+  // remove any old listeners first
+  const oldTextarea = textarea.cloneNode(true);
+  textarea.parentNode.replaceChild(oldTextarea, textarea);
+  const ta = document.getElementById('text-input');
+
   overlay.style.display = 'block';
   overlay.style.left = sx + 'px';
   overlay.style.top = sy + 'px';
-  textarea.style.width = sw + 'px';
-  textarea.style.height = sh + 'px';
-  textarea.value = shape.text || '';
-  textarea.focus();
-  textarea.select();
+  ta.style.width = Math.max(sw, 80) + 'px';
+  ta.style.height = Math.max(sh, 36) + 'px';
+  ta.value = shape.text || '';
 
+  // prevent overlay clicks from propagating to SVG
+  overlay.onmousedown = (e) => e.stopPropagation();
+
+  let finished = false;
   const finishEdit = () => {
+    if (finished) return;
+    finished = true;
     saveUndo();
-    shape.text = textarea.value;
+    shape.text = ta.value;
     overlay.style.display = 'none';
+    overlay.onmousedown = null;
     renderAll();
-    textarea.removeEventListener('blur', finishEdit);
-    textarea.removeEventListener('keydown', onKey);
   };
 
-  const onKey = (e) => {
+  ta.addEventListener('blur', () => {
+    // small delay to avoid blur firing from focus race conditions
+    setTimeout(() => { if (!finished) finishEdit(); }, 100);
+  });
+
+  ta.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       finishEdit();
     }
     if (e.key === 'Escape') {
+      finished = true;
       overlay.style.display = 'none';
-      textarea.removeEventListener('blur', finishEdit);
-      textarea.removeEventListener('keydown', onKey);
+      overlay.onmousedown = null;
     }
-  };
+  });
 
-  textarea.addEventListener('blur', finishEdit);
-  textarea.addEventListener('keydown', onKey);
+  ta.focus();
+  ta.select();
 }
 
 function onWheel(e) {
