@@ -1,0 +1,1723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>流程图绘制工具 - 企微AI虚拟员工业务逻辑设计</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --sidebar-w: 220px;
+  --toolbar-h: 44px;
+  --bg: #1e1e2e;
+  --bg2: #2a2a3e;
+  --bg3: #353550;
+  --text: #e0e0f0;
+  --text2: #a0a0c0;
+  --accent: #6c8cff;
+  --accent2: #4a6adf;
+  --border: #404060;
+  --canvas-bg: #f5f5fa;
+  --grid: #e0e0ea;
+  --shape-fill: #ffffff;
+  --shape-stroke: #4a5568;
+  --shape-selected: #6c8cff;
+  --connector-color: #4a5568;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  user-select: none;
+}
+
+/* --- Top Toolbar --- */
+#toolbar {
+  height: var(--toolbar-h);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 4px;
+  z-index: 100;
+}
+#toolbar .sep { width: 1px; height: 24px; background: var(--border); margin: 0 6px; }
+#toolbar button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+#toolbar button:hover { background: var(--bg3); border-color: var(--border); }
+#toolbar button.active { background: var(--accent2); border-color: var(--accent); color: #fff; }
+#toolbar .title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent);
+  margin-right: 12px;
+}
+#toolbar .spacer { flex: 1; }
+#zoom-display {
+  font-size: 12px;
+  color: var(--text2);
+  min-width: 48px;
+  text-align: center;
+}
+
+/* --- Sidebar --- */
+#sidebar {
+  position: absolute;
+  top: var(--toolbar-h);
+  left: 0;
+  width: var(--sidebar-w);
+  bottom: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 50;
+}
+#sidebar h3 {
+  font-size: 12px;
+  color: var(--text2);
+  padding: 12px 14px 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.shape-palette {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px 10px;
+}
+.palette-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 6px 6px;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+.palette-item:hover { border-color: var(--accent); background: #3a3a55; }
+.palette-item svg { width: 48px; height: 36px; }
+.palette-item span { font-size: 11px; color: var(--text2); }
+.palette-item:active { cursor: grabbing; }
+
+/* Color palette */
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 14px;
+}
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.color-swatch:hover { transform: scale(1.2); }
+.color-swatch.active { border-color: var(--accent); }
+
+/* --- Canvas --- */
+#canvas-container {
+  position: absolute;
+  top: var(--toolbar-h);
+  left: var(--sidebar-w);
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  background: var(--canvas-bg);
+}
+#canvas-svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* grid pattern */
+.grid-line { stroke: var(--grid); stroke-width: 0.5; }
+.grid-line-major { stroke: #d0d0de; stroke-width: 1; }
+
+/* shapes */
+.shape-group { cursor: move; }
+.shape-group:hover .shape-body { filter: brightness(0.97); }
+.shape-body {
+  fill: var(--shape-fill);
+  stroke: var(--shape-stroke);
+  stroke-width: 2;
+  transition: filter 0.1s;
+}
+.shape-group.selected .shape-body { stroke: var(--shape-selected); stroke-width: 2.5; }
+.shape-text {
+  font-family: inherit;
+  font-size: 13px;
+  fill: #2d3748;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.shape-text-sub {
+  font-size: 11px;
+  fill: #718096;
+}
+
+/* resize handles */
+.resize-handle {
+  fill: #fff;
+  stroke: var(--shape-selected);
+  stroke-width: 1.5;
+  cursor: nwse-resize;
+  r: 4;
+}
+.resize-handle.h-n, .resize-handle.h-s { cursor: ns-resize; }
+.resize-handle.h-e, .resize-handle.h-w { cursor: ew-resize; }
+
+/* connectors */
+.connector-line {
+  fill: none;
+  stroke: var(--connector-color);
+  stroke-width: 2;
+  marker-end: url(#arrowhead);
+}
+.connector-line:hover { stroke: var(--accent); stroke-width: 2.5; cursor: pointer; }
+.connector-line.selected { stroke: var(--shape-selected); stroke-width: 2.5; }
+
+/* connection ports */
+.conn-port {
+  fill: var(--accent);
+  r: 5;
+  opacity: 0;
+  cursor: crosshair;
+  transition: opacity 0.15s;
+}
+.shape-group:hover .conn-port,
+.shape-group.selected .conn-port { opacity: 0.7; }
+.conn-port:hover { opacity: 1; r: 6; }
+
+/* temp connector */
+.temp-connector {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+/* text input overlay */
+#text-input-overlay {
+  display: none;
+  position: absolute;
+  z-index: 200;
+}
+#text-input-overlay textarea {
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #2d3748;
+  text-align: center;
+  resize: none;
+  outline: none;
+  min-width: 80px;
+  min-height: 32px;
+}
+
+/* context menu */
+#context-menu {
+  display: none;
+  position: absolute;
+  z-index: 300;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+#context-menu .menu-item {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#context-menu .menu-item:hover { background: var(--bg3); }
+#context-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* minimap */
+#minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 180px;
+  height: 120px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+#minimap svg { width: 100%; height: 100%; }
+.minimap-viewport {
+  fill: rgba(108,140,255,0.15);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+/* help hint */
+#help-hint {
+  position: absolute;
+  bottom: 12px;
+  left: calc(var(--sidebar-w) + 12px);
+  font-size: 12px;
+  color: #888;
+  background: rgba(255,255,255,0.85);
+  padding: 4px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* property panel */
+#prop-panel {
+  display: none;
+  position: absolute;
+  top: var(--toolbar-h);
+  right: 0;
+  width: 200px;
+  bottom: 0;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  padding: 12px;
+  z-index: 50;
+  overflow-y: auto;
+}
+#prop-panel.visible { display: block; }
+#prop-panel h3 {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+#prop-panel label {
+  font-size: 12px;
+  color: var(--text2);
+  display: block;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+#prop-panel input[type="text"],
+#prop-panel input[type="number"],
+#prop-panel select {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<!-- Top Toolbar -->
+<div id="toolbar">
+  <span class="title">&#9998; 流程图设计器</span>
+  <div class="sep"></div>
+  <button id="btn-select" class="active" title="选择工具 (V)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+    选择
+  </button>
+  <button id="btn-connect" title="连线工具 (L)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    连线
+  </button>
+  <div class="sep"></div>
+  <button id="btn-undo" title="撤销 (Ctrl+Z)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+    撤销
+  </button>
+  <button id="btn-redo" title="重做 (Ctrl+Y)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
+    重做
+  </button>
+  <div class="sep"></div>
+  <button id="btn-delete" title="删除 (Delete)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+    删除
+  </button>
+  <div class="sep"></div>
+  <button id="btn-zoom-in" title="放大 (Ctrl++)">+</button>
+  <span id="zoom-display">100%</span>
+  <button id="btn-zoom-out" title="缩小 (Ctrl+-)">-</button>
+  <button id="btn-zoom-fit" title="适应画布">适应</button>
+  <span class="spacer"></span>
+  <button id="btn-export-png" title="导出PNG">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    导出PNG
+  </button>
+  <button id="btn-save" title="保存 (Ctrl+S)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    保存
+  </button>
+  <button id="btn-load" title="加载">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+    加载
+  </button>
+</div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <h3>基本形状</h3>
+  <div class="shape-palette" id="basic-shapes">
+    <div class="palette-item" draggable="true" data-shape="rect">
+      <svg viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="3" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>矩形</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="roundrect">
+      <svg viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="14" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>圆角矩形</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="diamond">
+      <svg viewBox="0 0 48 36"><polygon points="24,2 46,18 24,34 2,18" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>菱形</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="circle">
+      <svg viewBox="0 0 48 36"><ellipse cx="24" cy="18" rx="18" ry="14" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>椭圆</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="parallelogram">
+      <svg viewBox="0 0 48 36"><polygon points="12,4 46,4 36,32 2,32" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>平行四边形</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="hexagon">
+      <svg viewBox="0 0 48 36"><polygon points="14,4 34,4 46,18 34,32 14,32 2,18" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>六边形</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="cylinder">
+      <svg viewBox="0 0 48 36"><ellipse cx="24" cy="9" rx="18" ry="6" fill="#fff" stroke="#4a5568" stroke-width="1.5"/><path d="M6 9v18c0 3.3 8 6 18 6s18-2.7 18-6V9" fill="#fff" stroke="#4a5568" stroke-width="1.5"/><ellipse cx="24" cy="9" rx="18" ry="6" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>数据库</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="document">
+      <svg viewBox="0 0 48 36"><path d="M4,4 h40 v24 c-10,6 -30,-6 -40,0 z" fill="#fff" stroke="#4a5568" stroke-width="1.5"/></svg>
+      <span>文档</span>
+    </div>
+  </div>
+
+  <h3>企微AI专用</h3>
+  <div class="shape-palette" id="ai-shapes">
+    <div class="palette-item" draggable="true" data-shape="ai-agent">
+      <svg viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="6" fill="#ebf4ff" stroke="#4299e1" stroke-width="1.5"/><circle cx="18" cy="16" r="3" fill="#4299e1"/><circle cx="30" cy="16" r="3" fill="#4299e1"/><path d="M16 24 q8 6 16 0" fill="none" stroke="#4299e1" stroke-width="1.5"/></svg>
+      <span>AI Agent</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="message">
+      <svg viewBox="0 0 48 36"><path d="M4,4 h40 v22 h-28 l-8,8 v-8 h-4 z" fill="#f0fff4" stroke="#48bb78" stroke-width="1.5"/></svg>
+      <span>消息</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="api-call">
+      <svg viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="3" fill="#fffbeb" stroke="#ed8936" stroke-width="1.5"/><path d="M14 18h20M28 12l6 6-6 6" fill="none" stroke="#ed8936" stroke-width="1.5"/></svg>
+      <span>API调用</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="user">
+      <svg viewBox="0 0 48 36"><circle cx="24" cy="13" r="7" fill="#fef3c7" stroke="#d69e2e" stroke-width="1.5"/><path d="M10 33 c0-8 6-14 14-14s14 6 14 14" fill="#fef3c7" stroke="#d69e2e" stroke-width="1.5"/></svg>
+      <span>用户</span>
+    </div>
+  </div>
+
+  <h3>填充颜色</h3>
+  <div class="color-palette" id="fill-colors"></div>
+
+  <h3>边框颜色</h3>
+  <div class="color-palette" id="stroke-colors"></div>
+</div>
+
+<!-- Canvas -->
+<div id="canvas-container">
+  <svg id="canvas-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--connector-color)"/>
+      </marker>
+      <marker id="arrowhead-selected" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--shape-selected)"/>
+      </marker>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" class="grid-line"/>
+      </pattern>
+      <pattern id="grid-major" width="100" height="100" patternUnits="userSpaceOnUse">
+        <rect width="100" height="100" fill="url(#grid)"/>
+        <path d="M 100 0 L 0 0 0 100" fill="none" class="grid-line-major"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#grid-major)" id="grid-bg"/>
+    <g id="canvas-layer"></g>
+    <line class="temp-connector" id="temp-connector" x1="0" y1="0" x2="0" y2="0" style="display:none"/>
+  </svg>
+</div>
+
+<!-- Text input overlay -->
+<div id="text-input-overlay">
+  <textarea id="text-input" rows="2"></textarea>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu">
+  <div class="menu-item" data-action="edit">&#9998; 编辑文字</div>
+  <div class="menu-item" data-action="duplicate">&#10697; 复制</div>
+  <div class="menu-sep"></div>
+  <div class="menu-item" data-action="to-front">&#8593; 置于顶层</div>
+  <div class="menu-item" data-action="to-back">&#8595; 置于底层</div>
+  <div class="menu-sep"></div>
+  <div class="menu-item" data-action="delete" style="color:#f56565">&#10005; 删除</div>
+</div>
+
+<!-- Minimap -->
+<div id="minimap">
+  <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg">
+    <g id="minimap-content"></g>
+    <rect class="minimap-viewport" id="minimap-viewport"/>
+  </svg>
+</div>
+
+<!-- Help Hint -->
+<div id="help-hint">双击编辑文字 | 右键菜单 | 从左侧拖拽形状 | Ctrl+Z 撤销 | Delete 删除</div>
+
+<input type="file" id="file-input" accept=".json" style="display:none"/>
+
+<script>
+// ===================== DATA MODEL =====================
+let shapes = [];
+let connectors = [];
+let nextId = 1;
+let selectedIds = new Set();
+let selectedConnectorIds = new Set();
+let currentTool = 'select'; // 'select' | 'connect'
+let undoStack = [];
+let redoStack = [];
+
+// Pan & Zoom
+let viewBox = { x: -200, y: -100, w: 1200, h: 800 };
+let zoom = 1;
+
+const SNAP = 10;
+const COLORS = [
+  '#ffffff','#f7fafc','#edf2f7','#e2e8f0',
+  '#fed7d7','#feebc8','#fefcbf','#c6f6d5',
+  '#bee3f8','#c3dafe','#e9d8fd','#fed7e2',
+  '#fc8181','#f6ad55','#f6e05e','#68d391',
+  '#63b3ed','#7f9cf5','#b794f4','#f687b3',
+  '#e53e3e','#dd6b20','#d69e2e','#38a169',
+  '#3182ce','#5a67d8','#805ad5','#d53f8c',
+  '#2d3748','#4a5568','#718096','#a0aec0',
+];
+
+const SHAPE_DEFAULTS = {
+  rect:          { w: 140, h: 60, fill: '#ffffff', stroke: '#4a5568', text: '流程', rx: 4 },
+  roundrect:     { w: 140, h: 60, fill: '#ffffff', stroke: '#4a5568', text: '流程', rx: 28 },
+  diamond:       { w: 140, h: 90, fill: '#ffffff', stroke: '#4a5568', text: '判断?' },
+  circle:        { w: 120, h: 80, fill: '#ffffff', stroke: '#4a5568', text: '状态' },
+  parallelogram: { w: 150, h: 60, fill: '#ffffff', stroke: '#4a5568', text: '输入/输出' },
+  hexagon:       { w: 140, h: 70, fill: '#ffffff', stroke: '#4a5568', text: '准备' },
+  cylinder:      { w: 120, h: 80, fill: '#ffffff', stroke: '#4a5568', text: '数据库' },
+  document:      { w: 140, h: 70, fill: '#ffffff', stroke: '#4a5568', text: '文档' },
+  'ai-agent':    { w: 150, h: 70, fill: '#ebf4ff', stroke: '#4299e1', text: 'AI Agent' },
+  'message':     { w: 150, h: 70, fill: '#f0fff4', stroke: '#48bb78', text: '消息处理' },
+  'api-call':    { w: 150, h: 60, fill: '#fffbeb', stroke: '#ed8936', text: 'API 调用' },
+  'user':        { w: 100, h: 80, fill: '#fef3c7', stroke: '#d69e2e', text: '用户' },
+};
+
+// ===================== SVG REFS =====================
+const svg = document.getElementById('canvas-svg');
+const canvasLayer = document.getElementById('canvas-layer');
+const container = document.getElementById('canvas-container');
+const tempConnector = document.getElementById('temp-connector');
+
+// ===================== INIT =====================
+function init() {
+  setupColorPalettes();
+  setupToolbar();
+  setupDragDrop();
+  setupCanvasEvents();
+  setupContextMenu();
+  setupKeyboard();
+  updateViewBox();
+  updateMinimap();
+}
+
+// ===================== COLOR PALETTES =====================
+function setupColorPalettes() {
+  const fillDiv = document.getElementById('fill-colors');
+  const strokeDiv = document.getElementById('stroke-colors');
+  COLORS.forEach(c => {
+    const s1 = document.createElement('div');
+    s1.className = 'color-swatch';
+    s1.style.background = c;
+    s1.onclick = () => applyFillColor(c);
+    fillDiv.appendChild(s1);
+
+    const s2 = document.createElement('div');
+    s2.className = 'color-swatch';
+    s2.style.background = c;
+    s2.onclick = () => applyStrokeColor(c);
+    strokeDiv.appendChild(s2);
+  });
+}
+
+function applyFillColor(color) {
+  if (selectedIds.size === 0) return;
+  saveUndo();
+  selectedIds.forEach(id => {
+    const s = shapes.find(sh => sh.id === id);
+    if (s) s.fill = color;
+  });
+  renderAll();
+}
+
+function applyStrokeColor(color) {
+  if (selectedIds.size === 0) return;
+  saveUndo();
+  selectedIds.forEach(id => {
+    const s = shapes.find(sh => sh.id === id);
+    if (s) s.stroke = color;
+  });
+  renderAll();
+}
+
+// ===================== TOOLBAR =====================
+function setupToolbar() {
+  document.getElementById('btn-select').onclick = () => setTool('select');
+  document.getElementById('btn-connect').onclick = () => setTool('connect');
+  document.getElementById('btn-delete').onclick = deleteSelected;
+  document.getElementById('btn-undo').onclick = undo;
+  document.getElementById('btn-redo').onclick = redo;
+  document.getElementById('btn-zoom-in').onclick = () => zoomBy(1.2);
+  document.getElementById('btn-zoom-out').onclick = () => zoomBy(0.8);
+  document.getElementById('btn-zoom-fit').onclick = zoomFit;
+  document.getElementById('btn-export-png').onclick = exportPNG;
+  document.getElementById('btn-save').onclick = saveToFile;
+  document.getElementById('btn-load').onclick = () => document.getElementById('file-input').click();
+  document.getElementById('file-input').onchange = loadFromFile;
+}
+
+function setTool(tool) {
+  currentTool = tool;
+  document.getElementById('btn-select').classList.toggle('active', tool === 'select');
+  document.getElementById('btn-connect').classList.toggle('active', tool === 'connect');
+  svg.style.cursor = tool === 'connect' ? 'crosshair' : 'default';
+}
+
+// ===================== UNDO/REDO =====================
+function saveUndo() {
+  undoStack.push(JSON.stringify({ shapes, connectors, nextId }));
+  if (undoStack.length > 50) undoStack.shift();
+  redoStack = [];
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(JSON.stringify({ shapes, connectors, nextId }));
+  const state = JSON.parse(undoStack.pop());
+  shapes = state.shapes;
+  connectors = state.connectors;
+  nextId = state.nextId;
+  selectedIds.clear();
+  selectedConnectorIds.clear();
+  renderAll();
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(JSON.stringify({ shapes, connectors, nextId }));
+  const state = JSON.parse(redoStack.pop());
+  shapes = state.shapes;
+  connectors = state.connectors;
+  nextId = state.nextId;
+  selectedIds.clear();
+  selectedConnectorIds.clear();
+  renderAll();
+}
+
+// ===================== ZOOM/PAN =====================
+function updateViewBox() {
+  svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`);
+  document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+
+  // update grid pattern transforms for zoom consistency
+  const gridP = document.getElementById('grid');
+  const gridMaj = document.getElementById('grid-major');
+  if (gridP) {
+    gridP.setAttribute('patternTransform', `translate(${viewBox.x} ${viewBox.y})`);
+  }
+  if (gridMaj) {
+    gridMaj.setAttribute('patternTransform', `translate(${viewBox.x} ${viewBox.y})`);
+  }
+  updateMinimap();
+}
+
+function zoomBy(factor) {
+  const cx = viewBox.x + viewBox.w / 2;
+  const cy = viewBox.y + viewBox.h / 2;
+  zoom *= factor;
+  zoom = Math.max(0.1, Math.min(5, zoom));
+  const rect = container.getBoundingClientRect();
+  viewBox.w = rect.width / zoom;
+  viewBox.h = rect.height / zoom;
+  viewBox.x = cx - viewBox.w / 2;
+  viewBox.y = cy - viewBox.h / 2;
+  updateViewBox();
+}
+
+function zoomFit() {
+  if (shapes.length === 0) {
+    zoom = 1;
+    const rect = container.getBoundingClientRect();
+    viewBox = { x: -200, y: -100, w: rect.width, h: rect.height };
+    updateViewBox();
+    return;
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  shapes.forEach(s => {
+    minX = Math.min(minX, s.x);
+    minY = Math.min(minY, s.y);
+    maxX = Math.max(maxX, s.x + s.w);
+    maxY = Math.max(maxY, s.y + s.h);
+  });
+  const pad = 60;
+  const rect = container.getBoundingClientRect();
+  const bw = maxX - minX + pad * 2;
+  const bh = maxY - minY + pad * 2;
+  zoom = Math.min(rect.width / bw, rect.height / bh, 2);
+  viewBox.w = rect.width / zoom;
+  viewBox.h = rect.height / zoom;
+  viewBox.x = minX - pad - (viewBox.w - bw) / 2;
+  viewBox.y = minY - pad - (viewBox.h - bh) / 2;
+  updateViewBox();
+}
+
+function screenToSVG(clientX, clientY) {
+  const rect = container.getBoundingClientRect();
+  return {
+    x: viewBox.x + (clientX - rect.left) / rect.width * viewBox.w,
+    y: viewBox.y + (clientY - rect.top) / rect.height * viewBox.h
+  };
+}
+
+function snapVal(v) { return Math.round(v / SNAP) * SNAP; }
+
+// ===================== DRAG & DROP FROM PALETTE =====================
+function setupDragDrop() {
+  document.querySelectorAll('.palette-item[draggable]').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('shape-type', item.dataset.shape);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+  });
+
+  container.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  container.addEventListener('drop', e => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('shape-type');
+    if (!type) return;
+    const pt = screenToSVG(e.clientX, e.clientY);
+    const def = SHAPE_DEFAULTS[type];
+    saveUndo();
+    const shape = {
+      id: nextId++,
+      type,
+      x: snapVal(pt.x - def.w / 2),
+      y: snapVal(pt.y - def.h / 2),
+      w: def.w,
+      h: def.h,
+      fill: def.fill,
+      stroke: def.stroke,
+      text: def.text,
+      rx: def.rx || 0,
+    };
+    shapes.push(shape);
+    selectedIds.clear();
+    selectedIds.add(shape.id);
+    renderAll();
+  });
+}
+
+// ===================== SHAPE RENDERING =====================
+function renderAll() {
+  canvasLayer.innerHTML = '';
+
+  // render connectors first (behind shapes)
+  connectors.forEach(c => renderConnector(c));
+
+  // render shapes
+  shapes.forEach(s => renderShape(s));
+
+  updateMinimap();
+}
+
+function renderShape(s) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.classList.add('shape-group');
+  g.dataset.id = s.id;
+  if (selectedIds.has(s.id)) g.classList.add('selected');
+
+  // shape body
+  const body = createShapeBody(s);
+  body.classList.add('shape-body');
+  body.style.fill = s.fill;
+  body.style.stroke = s.stroke;
+  g.appendChild(body);
+
+  // text
+  const lines = (s.text || '').split('\n');
+  lines.forEach((line, i) => {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.classList.add('shape-text');
+    t.setAttribute('x', s.x + s.w / 2);
+    t.setAttribute('y', s.y + s.h / 2 + (i - (lines.length - 1) / 2) * 18);
+    t.textContent = line;
+    g.appendChild(t);
+  });
+
+  // connection ports (N, S, E, W)
+  const ports = getPortPositions(s);
+  Object.entries(ports).forEach(([dir, pos]) => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.classList.add('conn-port');
+    c.setAttribute('cx', pos.x);
+    c.setAttribute('cy', pos.y);
+    c.setAttribute('r', 5);
+    c.dataset.port = dir;
+    c.dataset.shapeId = s.id;
+    g.appendChild(c);
+  });
+
+  // resize handles when selected
+  if (selectedIds.has(s.id) && selectedIds.size === 1) {
+    const handles = [
+      { cx: s.x, cy: s.y, cursor: 'nwse-resize', dir: 'nw' },
+      { cx: s.x + s.w, cy: s.y, cursor: 'nesw-resize', dir: 'ne' },
+      { cx: s.x, cy: s.y + s.h, cursor: 'nesw-resize', dir: 'sw' },
+      { cx: s.x + s.w, cy: s.y + s.h, cursor: 'nwse-resize', dir: 'se' },
+    ];
+    handles.forEach(h => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.classList.add('resize-handle');
+      c.setAttribute('cx', h.cx);
+      c.setAttribute('cy', h.cy);
+      c.setAttribute('r', 4);
+      c.style.cursor = h.cursor;
+      c.dataset.resize = h.dir;
+      c.dataset.shapeId = s.id;
+      g.appendChild(c);
+    });
+  }
+
+  canvasLayer.appendChild(g);
+}
+
+function createShapeBody(s) {
+  let el;
+  switch (s.type) {
+    case 'rect':
+    case 'roundrect':
+    case 'ai-agent':
+    case 'api-call':
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      el.setAttribute('x', s.x);
+      el.setAttribute('y', s.y);
+      el.setAttribute('width', s.w);
+      el.setAttribute('height', s.h);
+      el.setAttribute('rx', s.type === 'roundrect' ? Math.min(s.h / 2, 28) : (s.rx || 4));
+      break;
+    case 'diamond':
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      el.setAttribute('points',
+        `${s.x + s.w/2},${s.y} ${s.x + s.w},${s.y + s.h/2} ${s.x + s.w/2},${s.y + s.h} ${s.x},${s.y + s.h/2}`);
+      break;
+    case 'circle':
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      el.setAttribute('cx', s.x + s.w / 2);
+      el.setAttribute('cy', s.y + s.h / 2);
+      el.setAttribute('rx', s.w / 2);
+      el.setAttribute('ry', s.h / 2);
+      break;
+    case 'parallelogram':
+      const off = s.w * 0.15;
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      el.setAttribute('points',
+        `${s.x + off},${s.y} ${s.x + s.w},${s.y} ${s.x + s.w - off},${s.y + s.h} ${s.x},${s.y + s.h}`);
+      break;
+    case 'hexagon':
+      const hoff = s.w * 0.2;
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      el.setAttribute('points',
+        `${s.x + hoff},${s.y} ${s.x + s.w - hoff},${s.y} ${s.x + s.w},${s.y + s.h/2} ${s.x + s.w - hoff},${s.y + s.h} ${s.x + hoff},${s.y + s.h} ${s.x},${s.y + s.h/2}`);
+      break;
+    case 'cylinder': {
+      const ry = Math.min(s.h * 0.15, 12);
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      body.setAttribute('d', `M${s.x},${s.y + ry} A${s.w/2},${ry} 0 0,1 ${s.x + s.w},${s.y + ry} V${s.y + s.h - ry} A${s.w/2},${ry} 0 0,1 ${s.x},${s.y + s.h - ry} Z`);
+      body.classList.add('shape-body');
+      const top = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      top.setAttribute('cx', s.x + s.w / 2);
+      top.setAttribute('cy', s.y + ry);
+      top.setAttribute('rx', s.w / 2);
+      top.setAttribute('ry', ry);
+      top.classList.add('shape-body');
+      el.appendChild(body);
+      el.appendChild(top);
+      return el;
+    }
+    case 'document': {
+      const wave = s.h * 0.15;
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      el.setAttribute('d', `M${s.x},${s.y} h${s.w} v${s.h - wave} c${-s.w * 0.25},${wave * 2} ${-s.w * 0.75},${-wave} ${-s.w},${wave} z`);
+      break;
+    }
+    case 'message': {
+      const tail = Math.min(s.h * 0.25, 16);
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      el.setAttribute('d', `M${s.x},${s.y} h${s.w} v${s.h - tail} h${-(s.w - s.w * 0.25)} l${-s.w * 0.1},${tail} v${-tail} h${-(s.w * 0.15)} z`);
+      break;
+    }
+    case 'user': {
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const head = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const hr = Math.min(s.w, s.h) * 0.2;
+      head.setAttribute('cx', s.x + s.w / 2);
+      head.setAttribute('cy', s.y + s.h * 0.3);
+      head.setAttribute('r', hr);
+      head.classList.add('shape-body');
+      const bodyEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      bodyEl.setAttribute('d', `M${s.x + s.w * 0.15},${s.y + s.h} A${s.w * 0.42},${s.h * 0.4} 0 0,1 ${s.x + s.w * 0.85},${s.y + s.h}`);
+      bodyEl.classList.add('shape-body');
+      el.appendChild(head);
+      el.appendChild(bodyEl);
+      return el;
+    }
+    default:
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      el.setAttribute('x', s.x);
+      el.setAttribute('y', s.y);
+      el.setAttribute('width', s.w);
+      el.setAttribute('height', s.h);
+      el.setAttribute('rx', 4);
+  }
+  return el;
+}
+
+function getPortPositions(s) {
+  return {
+    n: { x: s.x + s.w / 2, y: s.y },
+    s: { x: s.x + s.w / 2, y: s.y + s.h },
+    w: { x: s.x, y: s.y + s.h / 2 },
+    e: { x: s.x + s.w, y: s.y + s.h / 2 },
+  };
+}
+
+// ===================== CONNECTOR RENDERING =====================
+function renderConnector(c) {
+  const fromShape = shapes.find(s => s.id === c.from);
+  const toShape = shapes.find(s => s.id === c.to);
+  if (!fromShape || !toShape) return;
+
+  const fp = getPortPositions(fromShape)[c.fromPort];
+  const tp = getPortPositions(toShape)[c.toPort];
+  if (!fp || !tp) return;
+
+  // compute a nice path with right angles
+  const path = computeConnectorPath(fp, tp, c.fromPort, c.toPort);
+
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  el.setAttribute('d', path);
+  el.classList.add('connector-line');
+  el.dataset.connId = c.id;
+  if (selectedConnectorIds.has(c.id)) {
+    el.classList.add('selected');
+    el.style.markerEnd = 'url(#arrowhead-selected)';
+  }
+
+  // label
+  if (c.label) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.appendChild(el);
+    const mx = (fp.x + tp.x) / 2;
+    const my = (fp.y + tp.y) / 2;
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', mx - c.label.length * 4);
+    bg.setAttribute('y', my - 10);
+    bg.setAttribute('width', c.label.length * 8 + 8);
+    bg.setAttribute('height', 20);
+    bg.setAttribute('rx', 3);
+    bg.setAttribute('fill', '#fff');
+    bg.setAttribute('stroke', '#e2e8f0');
+    g.appendChild(bg);
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', mx + 4);
+    t.setAttribute('y', my);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.setAttribute('font-size', '11');
+    t.setAttribute('fill', '#4a5568');
+    t.textContent = c.label;
+    g.appendChild(t);
+    canvasLayer.appendChild(g);
+  } else {
+    canvasLayer.appendChild(el);
+  }
+}
+
+function computeConnectorPath(from, to, fromDir, toDir) {
+  const MIN_SEG = 30;
+  let path;
+
+  // simple approach: use one or two bends
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  // offset points based on port direction
+  const fOff = getDirectionOffset(fromDir, MIN_SEG);
+  const tOff = getDirectionOffset(toDir, MIN_SEG);
+
+  const p1 = { x: from.x + fOff.x, y: from.y + fOff.y };
+  const p2 = { x: to.x + tOff.x, y: to.y + tOff.y };
+
+  // create smooth path
+  if (fromDir === 'n' || fromDir === 's') {
+    if (toDir === 'n' || toDir === 's') {
+      const midY = (p1.y + p2.y) / 2;
+      path = `M${from.x},${from.y} L${p1.x},${p1.y} L${p1.x},${midY} L${p2.x},${midY} L${p2.x},${p2.y} L${to.x},${to.y}`;
+    } else {
+      path = `M${from.x},${from.y} L${p1.x},${p1.y} L${p1.x},${p2.y} L${p2.x},${p2.y} L${to.x},${to.y}`;
+    }
+  } else {
+    if (toDir === 'e' || toDir === 'w') {
+      const midX = (p1.x + p2.x) / 2;
+      path = `M${from.x},${from.y} L${p1.x},${p1.y} L${midX},${p1.y} L${midX},${p2.y} L${p2.x},${p2.y} L${to.x},${to.y}`;
+    } else {
+      path = `M${from.x},${from.y} L${p1.x},${p1.y} L${p2.x},${p1.y} L${p2.x},${p2.y} L${to.x},${to.y}`;
+    }
+  }
+
+  return path;
+}
+
+function getDirectionOffset(dir, dist) {
+  switch (dir) {
+    case 'n': return { x: 0, y: -dist };
+    case 's': return { x: 0, y: dist };
+    case 'e': return { x: dist, y: 0 };
+    case 'w': return { x: -dist, y: 0 };
+  }
+}
+
+// ===================== CANVAS INTERACTION =====================
+let dragState = null;
+
+function setupCanvasEvents() {
+  svg.addEventListener('mousedown', onMouseDown);
+  svg.addEventListener('mousemove', onMouseMove);
+  svg.addEventListener('mouseup', onMouseUp);
+  svg.addEventListener('dblclick', onDblClick);
+  svg.addEventListener('wheel', onWheel, { passive: false });
+
+  // handle window resize
+  window.addEventListener('resize', () => {
+    const rect = container.getBoundingClientRect();
+    viewBox.w = rect.width / zoom;
+    viewBox.h = rect.height / zoom;
+    updateViewBox();
+  });
+}
+
+function onMouseDown(e) {
+  if (e.button === 2) return; // right click handled by context menu
+  hideContextMenu();
+
+  const pt = screenToSVG(e.clientX, e.clientY);
+  const target = e.target;
+
+  // resize handle?
+  if (target.classList.contains('resize-handle')) {
+    const shapeId = parseInt(target.dataset.shapeId);
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape) return;
+    saveUndo();
+    dragState = {
+      type: 'resize',
+      shapeId,
+      dir: target.dataset.resize,
+      startX: pt.x,
+      startY: pt.y,
+      origX: shape.x,
+      origY: shape.y,
+      origW: shape.w,
+      origH: shape.h,
+    };
+    return;
+  }
+
+  // connection port?
+  if (target.classList.contains('conn-port') || currentTool === 'connect') {
+    if (target.classList.contains('conn-port')) {
+      const shapeId = parseInt(target.dataset.shapeId);
+      const port = target.dataset.port;
+      const shape = shapes.find(s => s.id === shapeId);
+      if (!shape) return;
+      const pos = getPortPositions(shape)[port];
+      dragState = {
+        type: 'connect',
+        fromId: shapeId,
+        fromPort: port,
+        startX: pos.x,
+        startY: pos.y,
+      };
+      tempConnector.setAttribute('x1', pos.x);
+      tempConnector.setAttribute('y1', pos.y);
+      tempConnector.setAttribute('x2', pos.x);
+      tempConnector.setAttribute('y2', pos.y);
+      tempConnector.style.display = 'block';
+      return;
+    }
+  }
+
+  // shape group?
+  const shapeGroup = target.closest('.shape-group');
+  if (shapeGroup) {
+    const shapeId = parseInt(shapeGroup.dataset.id);
+
+    if (currentTool === 'connect') {
+      // start connection from nearest port
+      const shape = shapes.find(s => s.id === shapeId);
+      if (!shape) return;
+      const ports = getPortPositions(shape);
+      let nearest = null, minDist = Infinity;
+      Object.entries(ports).forEach(([dir, pos]) => {
+        const d = Math.hypot(pt.x - pos.x, pt.y - pos.y);
+        if (d < minDist) { minDist = d; nearest = { dir, pos }; }
+      });
+      dragState = {
+        type: 'connect',
+        fromId: shapeId,
+        fromPort: nearest.dir,
+        startX: nearest.pos.x,
+        startY: nearest.pos.y,
+      };
+      tempConnector.setAttribute('x1', nearest.pos.x);
+      tempConnector.setAttribute('y1', nearest.pos.y);
+      tempConnector.setAttribute('x2', nearest.pos.x);
+      tempConnector.setAttribute('y2', nearest.pos.y);
+      tempConnector.style.display = 'block';
+      return;
+    }
+
+    // select & start drag
+    if (!e.shiftKey && !selectedIds.has(shapeId)) {
+      selectedIds.clear();
+      selectedConnectorIds.clear();
+    }
+    selectedIds.add(shapeId);
+    saveUndo();
+
+    const offsets = [];
+    selectedIds.forEach(id => {
+      const s = shapes.find(sh => sh.id === id);
+      if (s) offsets.push({ id, dx: pt.x - s.x, dy: pt.y - s.y });
+    });
+
+    dragState = {
+      type: 'move',
+      offsets,
+      startX: pt.x,
+      startY: pt.y,
+      moved: false,
+    };
+    renderAll();
+    return;
+  }
+
+  // connector line?
+  if (target.classList.contains('connector-line')) {
+    const connId = parseInt(target.dataset.connId);
+    if (!e.shiftKey) {
+      selectedIds.clear();
+      selectedConnectorIds.clear();
+    }
+    selectedConnectorIds.add(connId);
+    renderAll();
+    return;
+  }
+
+  // empty canvas - start pan or selection box
+  selectedIds.clear();
+  selectedConnectorIds.clear();
+  renderAll();
+
+  dragState = {
+    type: 'pan',
+    startX: e.clientX,
+    startY: e.clientY,
+    origVBX: viewBox.x,
+    origVBY: viewBox.y,
+  };
+}
+
+function onMouseMove(e) {
+  if (!dragState) return;
+  const pt = screenToSVG(e.clientX, e.clientY);
+
+  switch (dragState.type) {
+    case 'move':
+      dragState.moved = true;
+      dragState.offsets.forEach(o => {
+        const s = shapes.find(sh => sh.id === o.id);
+        if (s) {
+          s.x = snapVal(pt.x - o.dx);
+          s.y = snapVal(pt.y - o.dy);
+        }
+      });
+      renderAll();
+      break;
+
+    case 'resize': {
+      const s = shapes.find(sh => sh.id === dragState.shapeId);
+      if (!s) break;
+      const dx = pt.x - dragState.startX;
+      const dy = pt.y - dragState.startY;
+      const dir = dragState.dir;
+      if (dir.includes('e')) s.w = Math.max(40, snapVal(dragState.origW + dx));
+      if (dir.includes('w')) {
+        const nw = Math.max(40, snapVal(dragState.origW - dx));
+        s.x = snapVal(dragState.origX + dragState.origW - nw);
+        s.w = nw;
+      }
+      if (dir.includes('s')) s.h = Math.max(30, snapVal(dragState.origH + dy));
+      if (dir.includes('n')) {
+        const nh = Math.max(30, snapVal(dragState.origH - dy));
+        s.y = snapVal(dragState.origY + dragState.origH - nh);
+        s.h = nh;
+      }
+      renderAll();
+      break;
+    }
+
+    case 'connect':
+      tempConnector.setAttribute('x2', pt.x);
+      tempConnector.setAttribute('y2', pt.y);
+      break;
+
+    case 'pan': {
+      const rect = container.getBoundingClientRect();
+      const dx = (e.clientX - dragState.startX) / rect.width * viewBox.w;
+      const dy = (e.clientY - dragState.startY) / rect.height * viewBox.h;
+      viewBox.x = dragState.origVBX - dx;
+      viewBox.y = dragState.origVBY - dy;
+      updateViewBox();
+      break;
+    }
+  }
+}
+
+function onMouseUp(e) {
+  if (!dragState) return;
+
+  if (dragState.type === 'connect') {
+    tempConnector.style.display = 'none';
+    const pt = screenToSVG(e.clientX, e.clientY);
+
+    // find target shape & port
+    let targetShape = null, targetPort = null;
+    for (const s of shapes) {
+      if (s.id === dragState.fromId) continue;
+      const ports = getPortPositions(s);
+      for (const [dir, pos] of Object.entries(ports)) {
+        if (Math.hypot(pt.x - pos.x, pt.y - pos.y) < 20) {
+          targetShape = s;
+          targetPort = dir;
+        }
+      }
+    }
+
+    if (targetShape) {
+      saveUndo();
+      const conn = {
+        id: nextId++,
+        from: dragState.fromId,
+        fromPort: dragState.fromPort,
+        to: targetShape.id,
+        toPort: targetPort,
+        label: '',
+      };
+      connectors.push(conn);
+      renderAll();
+    }
+  }
+
+  if (dragState.type === 'move' && !dragState.moved) {
+    // undo the saved state since nothing changed
+    undoStack.pop();
+  }
+
+  dragState = null;
+}
+
+function onDblClick(e) {
+  const target = e.target;
+
+  // connector label editing
+  if (target.classList.contains('connector-line')) {
+    const connId = parseInt(target.dataset.connId);
+    const conn = connectors.find(c => c.id === connId);
+    if (!conn) return;
+    const label = prompt('连线标签:', conn.label || '');
+    if (label !== null) {
+      saveUndo();
+      conn.label = label;
+      renderAll();
+    }
+    return;
+  }
+
+  const shapeGroup = target.closest('.shape-group');
+  if (!shapeGroup) return;
+  const shapeId = parseInt(shapeGroup.dataset.id);
+  const shape = shapes.find(s => s.id === shapeId);
+  if (!shape) return;
+
+  startTextEdit(shape);
+}
+
+function startTextEdit(shape) {
+  const overlay = document.getElementById('text-input-overlay');
+  const textarea = document.getElementById('text-input');
+  const rect = container.getBoundingClientRect();
+
+  // compute screen position
+  const sx = rect.left + (shape.x - viewBox.x) / viewBox.w * rect.width;
+  const sy = rect.top + (shape.y - viewBox.y) / viewBox.h * rect.height;
+  const sw = shape.w / viewBox.w * rect.width;
+  const sh = shape.h / viewBox.h * rect.height;
+
+  overlay.style.display = 'block';
+  overlay.style.left = sx + 'px';
+  overlay.style.top = sy + 'px';
+  textarea.style.width = sw + 'px';
+  textarea.style.height = sh + 'px';
+  textarea.value = shape.text || '';
+  textarea.focus();
+  textarea.select();
+
+  const finishEdit = () => {
+    saveUndo();
+    shape.text = textarea.value;
+    overlay.style.display = 'none';
+    renderAll();
+    textarea.removeEventListener('blur', finishEdit);
+    textarea.removeEventListener('keydown', onKey);
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      finishEdit();
+    }
+    if (e.key === 'Escape') {
+      overlay.style.display = 'none';
+      textarea.removeEventListener('blur', finishEdit);
+      textarea.removeEventListener('keydown', onKey);
+    }
+  };
+
+  textarea.addEventListener('blur', finishEdit);
+  textarea.addEventListener('keydown', onKey);
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.92 : 1.08;
+  const pt = screenToSVG(e.clientX, e.clientY);
+  zoom *= factor;
+  zoom = Math.max(0.1, Math.min(5, zoom));
+  const rect = container.getBoundingClientRect();
+  const newW = rect.width / zoom;
+  const newH = rect.height / zoom;
+  // zoom towards cursor
+  const ratio = newW / viewBox.w;
+  viewBox.x = pt.x - (pt.x - viewBox.x) * ratio;
+  viewBox.y = pt.y - (pt.y - viewBox.y) * ratio;
+  viewBox.w = newW;
+  viewBox.h = newH;
+  updateViewBox();
+}
+
+// ===================== CONTEXT MENU =====================
+function setupContextMenu() {
+  svg.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const target = e.target;
+    const shapeGroup = target.closest('.shape-group');
+
+    if (shapeGroup) {
+      const shapeId = parseInt(shapeGroup.dataset.id);
+      if (!selectedIds.has(shapeId)) {
+        selectedIds.clear();
+        selectedConnectorIds.clear();
+        selectedIds.add(shapeId);
+        renderAll();
+      }
+      showContextMenu(e.clientX, e.clientY);
+    } else if (target.classList.contains('connector-line')) {
+      const connId = parseInt(target.dataset.connId);
+      selectedIds.clear();
+      selectedConnectorIds.clear();
+      selectedConnectorIds.add(connId);
+      renderAll();
+      showContextMenu(e.clientX, e.clientY);
+    }
+  });
+
+  document.getElementById('context-menu').addEventListener('click', e => {
+    const action = e.target.closest('.menu-item')?.dataset?.action;
+    if (!action) return;
+    hideContextMenu();
+    switch (action) {
+      case 'edit':
+        if (selectedIds.size === 1) {
+          const id = [...selectedIds][0];
+          const shape = shapes.find(s => s.id === id);
+          if (shape) startTextEdit(shape);
+        }
+        break;
+      case 'duplicate':
+        duplicateSelected();
+        break;
+      case 'to-front':
+        bringToFront();
+        break;
+      case 'to-back':
+        sendToBack();
+        break;
+      case 'delete':
+        deleteSelected();
+        break;
+    }
+  });
+
+  document.addEventListener('click', () => hideContextMenu());
+}
+
+function showContextMenu(x, y) {
+  const menu = document.getElementById('context-menu');
+  menu.style.display = 'block';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+function hideContextMenu() {
+  document.getElementById('context-menu').style.display = 'none';
+}
+
+// ===================== ACTIONS =====================
+function deleteSelected() {
+  if (selectedIds.size === 0 && selectedConnectorIds.size === 0) return;
+  saveUndo();
+  shapes = shapes.filter(s => !selectedIds.has(s.id));
+  connectors = connectors.filter(c =>
+    !selectedConnectorIds.has(c.id) &&
+    !selectedIds.has(c.from) &&
+    !selectedIds.has(c.to)
+  );
+  selectedIds.clear();
+  selectedConnectorIds.clear();
+  renderAll();
+}
+
+function duplicateSelected() {
+  if (selectedIds.size === 0) return;
+  saveUndo();
+  const newIds = new Set();
+  selectedIds.forEach(id => {
+    const s = shapes.find(sh => sh.id === id);
+    if (s) {
+      const ns = { ...s, id: nextId++, x: s.x + 20, y: s.y + 20 };
+      shapes.push(ns);
+      newIds.add(ns.id);
+    }
+  });
+  selectedIds.clear();
+  newIds.forEach(id => selectedIds.add(id));
+  renderAll();
+}
+
+function bringToFront() {
+  selectedIds.forEach(id => {
+    const idx = shapes.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      const [s] = shapes.splice(idx, 1);
+      shapes.push(s);
+    }
+  });
+  renderAll();
+}
+
+function sendToBack() {
+  const toMove = [];
+  selectedIds.forEach(id => {
+    const idx = shapes.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      toMove.push(shapes.splice(idx, 1)[0]);
+    }
+  });
+  shapes = [...toMove, ...shapes];
+  renderAll();
+}
+
+// ===================== KEYBOARD =====================
+function setupKeyboard() {
+  document.addEventListener('keydown', e => {
+    // ignore when editing text
+    if (document.getElementById('text-input-overlay').style.display === 'block') return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      deleteSelected();
+    }
+    if (e.key === 'Escape') {
+      selectedIds.clear();
+      selectedConnectorIds.clear();
+      setTool('select');
+      renderAll();
+    }
+    if (e.key === 'v' || e.key === 'V') setTool('select');
+    if (e.key === 'l' || e.key === 'L') setTool('connect');
+
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'z') { e.preventDefault(); undo(); }
+      if (e.key === 'y') { e.preventDefault(); redo(); }
+      if (e.key === 's') { e.preventDefault(); saveToFile(); }
+      if (e.key === 'a') {
+        e.preventDefault();
+        shapes.forEach(s => selectedIds.add(s.id));
+        renderAll();
+      }
+      if (e.key === 'd') {
+        e.preventDefault();
+        duplicateSelected();
+      }
+      if (e.key === '=') { e.preventDefault(); zoomBy(1.2); }
+      if (e.key === '-') { e.preventDefault(); zoomBy(0.8); }
+    }
+
+    // arrow key nudge
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selectedIds.size > 0) {
+      e.preventDefault();
+      saveUndo();
+      const step = e.shiftKey ? 1 : SNAP;
+      selectedIds.forEach(id => {
+        const s = shapes.find(sh => sh.id === id);
+        if (!s) return;
+        if (e.key === 'ArrowUp') s.y -= step;
+        if (e.key === 'ArrowDown') s.y += step;
+        if (e.key === 'ArrowLeft') s.x -= step;
+        if (e.key === 'ArrowRight') s.x += step;
+      });
+      renderAll();
+    }
+  });
+}
+
+// ===================== MINIMAP =====================
+function updateMinimap() {
+  const mmContent = document.getElementById('minimap-content');
+  const mmViewport = document.getElementById('minimap-viewport');
+  mmContent.innerHTML = '';
+
+  if (shapes.length === 0) {
+    mmViewport.setAttribute('x', 0);
+    mmViewport.setAttribute('y', 0);
+    mmViewport.setAttribute('width', 0);
+    mmViewport.setAttribute('height', 0);
+    return;
+  }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  shapes.forEach(s => {
+    minX = Math.min(minX, s.x);
+    minY = Math.min(minY, s.y);
+    maxX = Math.max(maxX, s.x + s.w);
+    maxY = Math.max(maxY, s.y + s.h);
+  });
+
+  // expand to include viewport
+  minX = Math.min(minX, viewBox.x);
+  minY = Math.min(minY, viewBox.y);
+  maxX = Math.max(maxX, viewBox.x + viewBox.w);
+  maxY = Math.max(maxY, viewBox.y + viewBox.h);
+
+  const pad = 40;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+  const totalW = maxX - minX;
+  const totalH = maxY - minY;
+
+  const mmSvg = document.getElementById('minimap-svg');
+  mmSvg.setAttribute('viewBox', `${minX} ${minY} ${totalW} ${totalH}`);
+
+  // draw shapes as simple rects
+  shapes.forEach(s => {
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('x', s.x);
+    r.setAttribute('y', s.y);
+    r.setAttribute('width', s.w);
+    r.setAttribute('height', s.h);
+    r.setAttribute('fill', s.fill);
+    r.setAttribute('stroke', s.stroke);
+    r.setAttribute('stroke-width', 2);
+    r.setAttribute('rx', 3);
+    mmContent.appendChild(r);
+  });
+
+  // draw connectors
+  connectors.forEach(c => {
+    const from = shapes.find(s => s.id === c.from);
+    const to = shapes.find(s => s.id === c.to);
+    if (!from || !to) return;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', from.x + from.w / 2);
+    line.setAttribute('y1', from.y + from.h / 2);
+    line.setAttribute('x2', to.x + to.w / 2);
+    line.setAttribute('y2', to.y + to.h / 2);
+    line.setAttribute('stroke', '#718096');
+    line.setAttribute('stroke-width', 2);
+    mmContent.appendChild(line);
+  });
+
+  // viewport indicator
+  mmViewport.setAttribute('x', viewBox.x);
+  mmViewport.setAttribute('y', viewBox.y);
+  mmViewport.setAttribute('width', viewBox.w);
+  mmViewport.setAttribute('height', viewBox.h);
+}
+
+// ===================== EXPORT =====================
+function exportPNG() {
+  // create a clean SVG for export
+  const clone = svg.cloneNode(true);
+  // set explicit size
+  let minX = -50, minY = -50, maxX = 400, maxY = 300;
+  shapes.forEach(s => {
+    minX = Math.min(minX, s.x - 30);
+    minY = Math.min(minY, s.y - 30);
+    maxX = Math.max(maxX, s.x + s.w + 30);
+    maxY = Math.max(maxY, s.y + s.h + 30);
+  });
+  const w = maxX - minX;
+  const h = maxY - minY;
+  clone.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`);
+  clone.setAttribute('width', w * 2);
+  clone.setAttribute('height', h * 2);
+
+  // add white background
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('x', minX);
+  bg.setAttribute('y', minY);
+  bg.setAttribute('width', w);
+  bg.setAttribute('height', h);
+  bg.setAttribute('fill', '#fff');
+  clone.insertBefore(bg, clone.firstChild.nextSibling);
+
+  const data = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+
+    canvas.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '流程图.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  };
+  img.src = url;
+}
+
+// ===================== SAVE / LOAD =====================
+function saveToFile() {
+  const data = JSON.stringify({ shapes, connectors, nextId, viewBox, zoom }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '流程图.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function loadFromFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      saveUndo();
+      shapes = data.shapes || [];
+      connectors = data.connectors || [];
+      nextId = data.nextId || 1;
+      if (data.viewBox) viewBox = data.viewBox;
+      if (data.zoom) zoom = data.zoom;
+      selectedIds.clear();
+      selectedConnectorIds.clear();
+      renderAll();
+      updateViewBox();
+    } catch (err) {
+      alert('文件格式错误: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ===================== START =====================
+init();
+
+// initial zoom fit on first load
+const initRect = container.getBoundingClientRect();
+viewBox.w = initRect.width;
+viewBox.h = initRect.height;
+updateViewBox();
+</script>
+</body>
+</html>
