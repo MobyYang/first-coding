@@ -1036,6 +1036,7 @@ function getDirectionOffset(dir, dist) {
 
 // ===================== CANVAS INTERACTION =====================
 let dragState = null;
+let lastClickInfo = { time: 0, shapeId: null };
 
 function setupCanvasEvents() {
   svg.addEventListener('mousedown', onMouseDown);
@@ -1108,6 +1109,15 @@ function onMouseDown(e) {
   const shapeGroup = target.closest('.shape-group');
   if (shapeGroup) {
     const shapeId = parseInt(shapeGroup.dataset.id);
+
+    // detect double-click manually (renderAll destroys DOM, native dblclick may not fire)
+    const now = Date.now();
+    if (lastClickInfo.shapeId === shapeId && now - lastClickInfo.time < 400) {
+      lastClickInfo = { time: 0, shapeId: null };
+      const shape = shapes.find(s => s.id === shapeId);
+      if (shape) { startTextEdit(shape); return; }
+    }
+    lastClickInfo = { time: now, shapeId };
 
     if (currentTool === 'connect') {
       // start connection from nearest port
