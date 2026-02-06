@@ -555,6 +555,33 @@ const canvasLayer = document.getElementById('canvas-layer');
 const container = document.getElementById('canvas-container');
 const tempConnector = document.getElementById('temp-connector');
 
+// ===================== AUTO SAVE / RESTORE =====================
+const STORAGE_KEY = 'diagram-tool-state';
+
+function autoSave() {
+  try {
+    const state = { shapes, connectors, nextId, viewBox, zoom };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) { /* ignore quota errors */ }
+}
+
+function autoRestore() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    if (state.shapes && state.shapes.length > 0) {
+      shapes = state.shapes;
+      connectors = state.connectors || [];
+      nextId = state.nextId || 1;
+      if (state.viewBox) viewBox = state.viewBox;
+      if (state.zoom) zoom = state.zoom;
+      return true;
+    }
+  } catch (e) { /* ignore parse errors */ }
+  return false;
+}
+
 // ===================== INIT =====================
 function init() {
   setupColorPalettes();
@@ -563,6 +590,10 @@ function init() {
   setupCanvasEvents();
   setupContextMenu();
   setupKeyboard();
+  const restored = autoRestore();
+  if (restored) {
+    renderAll();
+  }
   updateViewBox();
   updateMinimap();
 }
@@ -675,6 +706,7 @@ function updateViewBox() {
     gridMaj.setAttribute('patternTransform', `translate(${viewBox.x} ${viewBox.y})`);
   }
   updateMinimap();
+  autoSave();
 }
 
 function zoomBy(factor) {
@@ -774,6 +806,7 @@ function renderAll() {
   shapes.forEach(s => renderShape(s));
 
   updateMinimap();
+  autoSave();
 }
 
 function renderShape(s) {
