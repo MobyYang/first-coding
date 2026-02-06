@@ -429,21 +429,71 @@ body {
 
   <h3>企微AI专用</h3>
   <div class="shape-palette" id="ai-shapes">
-    <div class="palette-item" draggable="true" data-shape="ai-agent">
-      <svg viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="6" fill="#ebf4ff" stroke="#4299e1" stroke-width="1.5"/><circle cx="18" cy="16" r="3" fill="#4299e1"/><circle cx="30" cy="16" r="3" fill="#4299e1"/><path d="M16 24 q8 6 16 0" fill="none" stroke="#4299e1" stroke-width="1.5"/></svg>
-      <span>AI Agent</span>
+    <div class="palette-item" draggable="true" data-shape="wx-bot">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="6" fill="#ebf4ff" stroke="#4299e1" stroke-width="1.5"/>
+        <circle cx="18" cy="14" r="2.5" fill="#4299e1"/><circle cx="30" cy="14" r="2.5" fill="#4299e1"/>
+        <path d="M17 22 q7 5 14 0" fill="none" stroke="#4299e1" stroke-width="1.5"/>
+        <line x1="24" y1="3" x2="24" y2="8" stroke="#4299e1" stroke-width="1.5"/>
+        <circle cx="24" cy="2" r="1.5" fill="#4299e1"/>
+      </svg>
+      <span>Bot</span>
     </div>
-    <div class="palette-item" draggable="true" data-shape="message">
-      <svg viewBox="0 0 48 36"><path d="M4,4 h40 v22 h-28 l-8,8 v-8 h-4 z" fill="#f0fff4" stroke="#48bb78" stroke-width="1.5"/></svg>
+    <div class="palette-item" draggable="true" data-shape="wx-app">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="4" fill="#f0fff4" stroke="#38a169" stroke-width="1.5"/>
+        <rect x="12" y="8" width="24" height="16" rx="2" fill="none" stroke="#38a169" stroke-width="1.2"/>
+        <circle cx="24" cy="28" r="2" fill="#38a169"/>
+        <line x1="18" y1="12" x2="30" y2="12" stroke="#38a169" stroke-width="1"/>
+        <line x1="18" y1="16" x2="26" y2="16" stroke="#38a169" stroke-width="1"/>
+      </svg>
+      <span>自建应用</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="wx-user">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="4" fill="#fefcbf" stroke="#d69e2e" stroke-width="1.5"/>
+        <circle cx="24" cy="12" r="5" fill="none" stroke="#d69e2e" stroke-width="1.5"/>
+        <path d="M14 30 c0-6 4.5-10 10-10s10 4 10 10" fill="none" stroke="#d69e2e" stroke-width="1.5"/>
+      </svg>
+      <span>用户</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="wx-api">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="4" fill="#fffbeb" stroke="#ed8936" stroke-width="1.5"/>
+        <text x="24" y="20" text-anchor="middle" font-size="11" font-weight="bold" fill="#ed8936" font-family="monospace">API</text>
+        <path d="M12 26h24" fill="none" stroke="#ed8936" stroke-width="1" stroke-dasharray="2 2"/>
+      </svg>
+      <span>API</span>
+    </div>
+    <div class="palette-item" draggable="true" data-shape="wx-message">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="4" fill="#ebf8ff" stroke="#3182ce" stroke-width="1.5"/>
+        <rect x="11" y="8" width="20" height="6" rx="3" fill="#bee3f8" stroke="#3182ce" stroke-width="0.8"/>
+        <rect x="17" y="18" width="20" height="6" rx="3" fill="#3182ce" stroke="none"/>
+        <polygon points="11,14 8,17 11,15" fill="#bee3f8" stroke="#3182ce" stroke-width="0.8"/>
+        <polygon points="37,24 40,27 37,25" fill="#3182ce"/>
+      </svg>
       <span>消息</span>
     </div>
-    <div class="palette-item" draggable="true" data-shape="api-call">
-      <svg viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="3" fill="#fffbeb" stroke="#ed8936" stroke-width="1.5"/><path d="M14 18h20M28 12l6 6-6 6" fill="none" stroke="#ed8936" stroke-width="1.5"/></svg>
-      <span>API调用</span>
+    <div class="palette-item" draggable="true" data-shape="wx-private">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="4" fill="#faf5ff" stroke="#805ad5" stroke-width="1.5"/>
+        <circle cx="19" cy="14" r="4" fill="none" stroke="#805ad5" stroke-width="1.3"/>
+        <circle cx="29" cy="14" r="4" fill="none" stroke="#805ad5" stroke-width="1.3"/>
+        <path d="M16 26 h16" fill="none" stroke="#805ad5" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <polygon points="32,26 30,24 30,28" fill="#805ad5"/>
+      </svg>
+      <span>私聊</span>
     </div>
-    <div class="palette-item" draggable="true" data-shape="user">
-      <svg viewBox="0 0 48 36"><circle cx="24" cy="13" r="7" fill="#fef3c7" stroke="#d69e2e" stroke-width="1.5"/><path d="M10 33 c0-8 6-14 14-14s14 6 14 14" fill="#fef3c7" stroke="#d69e2e" stroke-width="1.5"/></svg>
-      <span>用户</span>
+    <div class="palette-item" draggable="true" data-shape="wx-group">
+      <svg viewBox="0 0 48 36">
+        <rect x="4" y="2" width="40" height="32" rx="4" fill="#fff5f5" stroke="#e53e3e" stroke-width="1.5"/>
+        <circle cx="17" cy="12" r="3.5" fill="none" stroke="#e53e3e" stroke-width="1.2"/>
+        <circle cx="31" cy="12" r="3.5" fill="none" stroke="#e53e3e" stroke-width="1.2"/>
+        <circle cx="24" cy="11" r="3.5" fill="none" stroke="#e53e3e" stroke-width="1.2"/>
+        <path d="M12 28 c0-5 5-8 12-8s12 3 12 8" fill="none" stroke="#e53e3e" stroke-width="1.3"/>
+      </svg>
+      <span>群聊</span>
     </div>
   </div>
 
@@ -543,10 +593,13 @@ const SHAPE_DEFAULTS = {
   hexagon:       { w: 140, h: 70, fill: '#ffffff', stroke: '#4a5568', text: '准备' },
   cylinder:      { w: 120, h: 80, fill: '#ffffff', stroke: '#4a5568', text: '数据库' },
   document:      { w: 140, h: 70, fill: '#ffffff', stroke: '#4a5568', text: '文档' },
-  'ai-agent':    { w: 150, h: 70, fill: '#ebf4ff', stroke: '#4299e1', text: 'AI Agent' },
-  'message':     { w: 150, h: 70, fill: '#f0fff4', stroke: '#48bb78', text: '消息处理' },
-  'api-call':    { w: 150, h: 60, fill: '#fffbeb', stroke: '#ed8936', text: 'API 调用' },
-  'user':        { w: 100, h: 80, fill: '#fef3c7', stroke: '#d69e2e', text: '用户' },
+  'wx-bot':      { w: 140, h: 70, fill: '#ebf4ff', stroke: '#4299e1', text: 'Bot', icon: 'bot' },
+  'wx-app':      { w: 140, h: 70, fill: '#f0fff4', stroke: '#38a169', text: '自建应用', icon: 'app' },
+  'wx-user':     { w: 140, h: 70, fill: '#fefcbf', stroke: '#d69e2e', text: '用户', icon: 'user' },
+  'wx-api':      { w: 140, h: 70, fill: '#fffbeb', stroke: '#ed8936', text: 'API', icon: 'api' },
+  'wx-message':  { w: 140, h: 70, fill: '#ebf8ff', stroke: '#3182ce', text: '消息', icon: 'message' },
+  'wx-private':  { w: 140, h: 70, fill: '#faf5ff', stroke: '#805ad5', text: '私聊', icon: 'private' },
+  'wx-group':    { w: 140, h: 70, fill: '#fff5f5', stroke: '#e53e3e', text: '群聊', icon: 'group' },
 };
 
 // ===================== SVG REFS =====================
@@ -822,12 +875,14 @@ function renderShape(s) {
   body.style.stroke = s.stroke;
   g.appendChild(body);
 
-  // text
+  // text - offset right for wx- shapes to leave room for icon
+  const isWx = s.type.startsWith('wx-');
+  const textOffsetX = isWx ? 15 : 0;
   const lines = (s.text || '').split('\n');
   lines.forEach((line, i) => {
     const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     t.classList.add('shape-text');
-    t.setAttribute('x', s.x + s.w / 2);
+    t.setAttribute('x', s.x + s.w / 2 + textOffsetX);
     t.setAttribute('y', s.y + s.h / 2 + (i - (lines.length - 1) / 2) * 18);
     t.textContent = line;
     g.appendChild(t);
@@ -875,8 +930,6 @@ function createShapeBody(s) {
   switch (s.type) {
     case 'rect':
     case 'roundrect':
-    case 'ai-agent':
-    case 'api-call':
       el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       el.setAttribute('x', s.x);
       el.setAttribute('y', s.y);
@@ -930,25 +983,25 @@ function createShapeBody(s) {
       el.setAttribute('d', `M${s.x},${s.y} h${s.w} v${s.h - wave} c${-s.w * 0.25},${wave * 2} ${-s.w * 0.75},${-wave} ${-s.w},${wave} z`);
       break;
     }
-    case 'message': {
-      const tail = Math.min(s.h * 0.25, 16);
-      el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      el.setAttribute('d', `M${s.x},${s.y} h${s.w} v${s.h - tail} h${-(s.w - s.w * 0.25)} l${-s.w * 0.1},${tail} v${-tail} h${-(s.w * 0.15)} z`);
-      break;
-    }
-    case 'user': {
+    case 'wx-bot':
+    case 'wx-app':
+    case 'wx-user':
+    case 'wx-api':
+    case 'wx-message':
+    case 'wx-private':
+    case 'wx-group': {
       el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      const head = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      const hr = Math.min(s.w, s.h) * 0.2;
-      head.setAttribute('cx', s.x + s.w / 2);
-      head.setAttribute('cy', s.y + s.h * 0.3);
-      head.setAttribute('r', hr);
-      head.classList.add('shape-body');
-      const bodyEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      bodyEl.setAttribute('d', `M${s.x + s.w * 0.15},${s.y + s.h} A${s.w * 0.42},${s.h * 0.4} 0 0,1 ${s.x + s.w * 0.85},${s.y + s.h}`);
-      bodyEl.classList.add('shape-body');
-      el.appendChild(head);
-      el.appendChild(bodyEl);
+      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('x', s.x);
+      bgRect.setAttribute('y', s.y);
+      bgRect.setAttribute('width', s.w);
+      bgRect.setAttribute('height', s.h);
+      bgRect.setAttribute('rx', 6);
+      bgRect.classList.add('shape-body');
+      el.appendChild(bgRect);
+      // draw icon in left area
+      const iconG = createWxIcon(s);
+      if (iconG) el.appendChild(iconG);
       return el;
     }
     default:
@@ -960,6 +1013,96 @@ function createShapeBody(s) {
       el.setAttribute('rx', 4);
   }
   return el;
+}
+
+function createWxIcon(s) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(ns, 'g');
+  g.setAttribute('pointer-events', 'none');
+  const color = s.stroke;
+  // icon drawn in left 30px area of the shape
+  const ix = s.x + 8;
+  const iy = s.y + s.h / 2;
+  const def = SHAPE_DEFAULTS[s.type];
+  const icon = def ? def.icon : '';
+
+  function mkEl(tag, attrs) {
+    const e = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+    return e;
+  }
+
+  switch (icon) {
+    case 'bot': {
+      // robot face
+      const cx = ix + 10, cy = iy;
+      g.appendChild(mkEl('circle', { cx: cx - 4, cy: cy - 3, r: 2, fill: color }));
+      g.appendChild(mkEl('circle', { cx: cx + 4, cy: cy - 3, r: 2, fill: color }));
+      g.appendChild(mkEl('path', { d: `M${cx - 5} ${cy + 3} q5 4 10 0`, fill: 'none', stroke: color, 'stroke-width': 1.3 }));
+      g.appendChild(mkEl('line', { x1: cx, y1: cy - 12, x2: cx, y2: cy - 8, stroke: color, 'stroke-width': 1.3 }));
+      g.appendChild(mkEl('circle', { cx: cx, cy: cy - 13, r: 1.5, fill: color }));
+      break;
+    }
+    case 'app': {
+      // app window
+      const cx = ix + 10, cy = iy;
+      g.appendChild(mkEl('rect', { x: cx - 8, y: cy - 9, width: 16, height: 13, rx: 2, fill: 'none', stroke: color, 'stroke-width': 1.3 }));
+      g.appendChild(mkEl('line', { x1: cx - 5, y1: cy - 5, x2: cx + 5, y2: cy - 5, stroke: color, 'stroke-width': 0.8 }));
+      g.appendChild(mkEl('line', { x1: cx - 5, y1: cy - 2, x2: cx + 2, y2: cy - 2, stroke: color, 'stroke-width': 0.8 }));
+      g.appendChild(mkEl('circle', { cx: cx, cy: cy + 8, r: 1.8, fill: color }));
+      break;
+    }
+    case 'user': {
+      // person
+      const cx = ix + 10, cy = iy;
+      g.appendChild(mkEl('circle', { cx: cx, cy: cy - 5, r: 4, fill: 'none', stroke: color, 'stroke-width': 1.3 }));
+      g.appendChild(mkEl('path', { d: `M${cx - 7} ${cy + 10} c0-5 3-8 7-8s7 3 7 8`, fill: 'none', stroke: color, 'stroke-width': 1.3 }));
+      break;
+    }
+    case 'api': {
+      // API text badge
+      const cx = ix + 10, cy = iy;
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', cx);
+      t.setAttribute('y', cy + 1);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('dominant-baseline', 'central');
+      t.setAttribute('font-size', '10');
+      t.setAttribute('font-weight', 'bold');
+      t.setAttribute('font-family', 'monospace');
+      t.setAttribute('fill', color);
+      t.textContent = 'API';
+      g.appendChild(t);
+      g.appendChild(mkEl('path', { d: `M${cx - 10} ${cy + 7}h20`, fill: 'none', stroke: color, 'stroke-width': 0.8, 'stroke-dasharray': '2 2' }));
+      break;
+    }
+    case 'message': {
+      // chat bubbles
+      const cx = ix + 10, cy = iy;
+      g.appendChild(mkEl('rect', { x: cx - 9, y: cy - 9, width: 13, height: 7, rx: 2, fill: color, opacity: 0.2, stroke: color, 'stroke-width': 0.8 }));
+      g.appendChild(mkEl('rect', { x: cx - 3, y: cy + 0, width: 13, height: 7, rx: 2, fill: color, stroke: 'none' }));
+      break;
+    }
+    case 'private': {
+      // two people with arrow
+      const cx = ix + 10, cy = iy;
+      g.appendChild(mkEl('circle', { cx: cx - 5, cy: cy - 4, r: 3, fill: 'none', stroke: color, 'stroke-width': 1.2 }));
+      g.appendChild(mkEl('circle', { cx: cx + 5, cy: cy - 4, r: 3, fill: 'none', stroke: color, 'stroke-width': 1.2 }));
+      g.appendChild(mkEl('line', { x1: cx - 5, y1: cy + 5, x2: cx + 5, y2: cy + 5, stroke: color, 'stroke-width': 1.3 }));
+      g.appendChild(mkEl('polygon', { points: `${cx + 5},${cy + 5} ${cx + 3},${cy + 3} ${cx + 3},${cy + 7}`, fill: color }));
+      break;
+    }
+    case 'group': {
+      // three people
+      const cx = ix + 10, cy = iy;
+      g.appendChild(mkEl('circle', { cx: cx - 6, cy: cy - 4, r: 2.8, fill: 'none', stroke: color, 'stroke-width': 1.1 }));
+      g.appendChild(mkEl('circle', { cx: cx, cy: cy - 5, r: 2.8, fill: 'none', stroke: color, 'stroke-width': 1.1 }));
+      g.appendChild(mkEl('circle', { cx: cx + 6, cy: cy - 4, r: 2.8, fill: 'none', stroke: color, 'stroke-width': 1.1 }));
+      g.appendChild(mkEl('path', { d: `M${cx - 9} ${cy + 8} c0-4 4-7 9-7s9 3 9 7`, fill: 'none', stroke: color, 'stroke-width': 1.2 }));
+      break;
+    }
+  }
+  return g;
 }
 
 function getPortPositions(s) {
