@@ -22,7 +22,8 @@ function initialLang(settings = {}) {
 export const progress = reactive({
   // 每课最好成绩，例如 { '1': { stars: 3, best: 5 } }
   lessons: saved.lessons || {},
-  settings: { sound: true, ...(saved.settings || {}), lang: initialLang(saved.settings) },
+  // sound：音效；voice：老师讲解的声音
+  settings: { sound: true, voice: true, ...(saved.settings || {}), lang: initialLang(saved.settings) },
 })
 
 watch(

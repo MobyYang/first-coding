@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { t } from '../i18n.js'
 import { play } from '../sound.js'
 import { progress, resetProgress, setLang as chooseLang } from '../store.js'
+import { say, toggleVoice } from '../voice.js'
 
 const emit = defineEmits(['back'])
 const confirming = ref(false)
@@ -17,6 +18,12 @@ function setLang(lang) {
 function toggleSound() {
   progress.settings.sound = !progress.settings.sound
   play('tap')
+}
+
+// 打开老师讲解时，老师说一句话，听听是什么声音
+function switchVoice() {
+  play('tap')
+  if (toggleVoice()) say(t('home.hello'))
 }
 
 function onReset() {
@@ -59,6 +66,15 @@ const METHODS = [
         <span class="setting-name">{{ t('settings.sound') }}</span>
         <button type="button" class="switch" :class="{ on: progress.settings.sound }" role="switch" :aria-checked="progress.settings.sound" @click="toggleSound">
           {{ progress.settings.sound ? `🔊 ${t('settings.on')}` : `🔇 ${t('settings.off')}` }}
+        </button>
+      </div>
+      <div class="setting">
+        <span class="setting-name">
+          {{ t('settings.voice') }}
+          <small class="setting-note">{{ t('settings.voiceNote') }}</small>
+        </span>
+        <button type="button" class="switch" :class="{ on: progress.settings.voice }" role="switch" :aria-checked="progress.settings.voice" @click="switchVoice">
+          {{ progress.settings.voice ? `🗣️ ${t('settings.on')}` : `🔇 ${t('settings.off')}` }}
         </button>
       </div>
       <div class="setting">
@@ -105,8 +121,17 @@ const METHODS = [
   border-bottom: 2px solid var(--paper-line);
 }
 .setting-name {
+  flex: 1 1 220px;
   font-weight: 600;
   font-size: 1.05rem;
+}
+.setting-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ink-soft);
 }
 .segmented {
   display: inline-flex;

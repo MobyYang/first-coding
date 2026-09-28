@@ -2,6 +2,7 @@
 // 一节课：先跟老师学一道例题（一步一步演算），再做 5 道练习。
 // 练习时孩子自己列步骤：每一步先想做什么——选方法、点天平、写数；这一步能这样做，就写出算式，结果由孩子自己算。
 // 不能这样做时只说为什么，不替孩子选；可以擦掉一步换个方法。提示先问下一步怎么想，再说用哪个方法。
+// 老师讲解的声音：例题每一页都读（StepPlayer）；练习时读提示、为什么不能这样做、算错了、做对了。
 import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
 import ConfettiBurst from './ConfettiBurst.vue'
 import LessonResult from './LessonResult.vue'
@@ -18,7 +19,8 @@ import { randomSeed } from '../core/random.js'
 import { buildWorking } from '../core/working.js'
 import { t, template } from '../i18n.js'
 import { play } from '../sound.js'
-import { recordLesson } from '../store.js'
+import { progress, recordLesson } from '../store.js'
+import { say, stopVoice, toggleVoice } from '../voice.js'
 import { makeWords } from '../words.js'
 
 const props = defineProps({
@@ -104,10 +106,12 @@ function resetProblem() {
   message.value = { text: t('compose.start'), mood: 'think' }
 }
 
-function goPractice() {
+async function goPractice() {
   phase.value = 'practice'
   resetProblem()
   window.scrollTo({ top: 0 })
+  await nextTick() // 例题收起来（老师停下）以后，再读练习怎么做
+  say(message.value.text)
 }
 
 // 列步骤那里出了话（提示、为什么不能这样做），滚到看得见“写出来”的地方
@@ -158,6 +162,7 @@ function confirmStep() {
     mistakes.value = true
     message.value = { text: words.value.reasonText(res.reason), mood: 'oops' }
     play('wrong')
+    say(message.value.text)
     showMessage()
     return
   }
@@ -191,6 +196,7 @@ function enter(value) {
     mistakes.value = true
     tip.value = { text: t('work.wrong'), mood: 'oops' }
     play('wrong')
+    say(tip.value.text)
     return
   }
   values[blank.id] = value
@@ -230,6 +236,7 @@ function commitStep() {
     message.value = null
     if (!mistakes.value && !helped.value) firstTry.value++
     play('solved')
+    say(doneText.value)
     confetti.value?.fire()
     return
   }
@@ -262,13 +269,17 @@ function hint() {
   if (planned.value) {
     const id = Object.keys(wrong)[0] ?? nextBlank.value
     const blank = planned.value.blanks.find((b) => b.id === id)
-    if (blank) tip.value = { text: words.value.hintText(planned.value, blank), mood: 'think' }
+    if (blank) {
+      tip.value = { text: words.value.hintText(planned.value, blank), mood: 'think' }
+      say(tip.value.text)
+    }
     return
   }
   const next = nextStepHint(state.value, props.lesson.methods)
   if (!next) message.value = { text: t('next.stuck'), mood: 'think' }
   else message.value = { text: hintLevel.value === 0 ? words.value.nextThink(next) : words.value.nextDo(next), mood: 'think' }
   hintLevel.value = 1
+  say(message.value.text)
   showMessage()
 }
 
@@ -278,6 +289,7 @@ function openExample() {
 }
 
 function nextProblem() {
+  stopVoice()
   if (index.value < problems.length - 1) {
     index.value++
     resetProblem()
@@ -291,7 +303,15 @@ function nextProblem() {
   phase.value = 'done'
 }
 
-onBeforeUnmount(() => clearTimeout(pause))
+onBeforeUnmount(() => {
+  clearTimeout(pause)
+  stopVoice()
+})
+
+function switchVoice() {
+  toggleVoice()
+  play('tap')
+}
 
 // 键盘上方显示正在写的那一步
 function padSentence(typed) {
@@ -335,7 +355,16 @@ const eyebrow = computed(() =>
         <p class="eyebrow">{{ eyebrow }}</p>
         <h1>{{ title }}</h1>
       </div>
-      <span class="topbar-spacer" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="btn btn-soft btn-small voice-toggle"
+        :aria-pressed="progress.settings.voice"
+        :aria-label="t('settings.voice')"
+        :title="progress.settings.voice ? t('voice.on') : t('voice.off')"
+        @click="switchVoice"
+      >
+        {{ progress.settings.voice ? '🔊' : '🔇' }}
+      </button>
     </header>
 
     <OwlSays class="owl-row" :title="bubble.title" :text="bubble.text" mood="think" />
@@ -343,6 +372,7 @@ const eyebrow = computed(() =>
     <!-- 例题：跟着老师一步一步学 -->
     <StepPlayer
       v-if="phase === 'teach'"
+      :lesson-id="lesson.id"
       :puzzle="example"
       :tools="lesson.tools"
       :theme="theme"
@@ -461,8 +491,10 @@ const eyebrow = computed(() =>
   min-height: 100vh;
   min-height: 100dvh;
 }
-.topbar-spacer {
-  width: 44px;
+.voice-toggle {
+  min-width: 44px;
+  padding-inline: 8px;
+  font-size: 1.2rem;
 }
 .action-bar {
   position: sticky;

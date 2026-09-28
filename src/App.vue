@@ -6,6 +6,7 @@ import SettingsView from './components/SettingsView.vue'
 import { LESSONS, findLesson } from './core/lessons.js'
 import { unlockAudio } from './sound.js'
 import { progress } from './store.js'
+import { unlockVoice } from './voice.js'
 
 const screen = ref('home')
 const lessonId = ref(null)
@@ -44,7 +45,7 @@ function next() {
 </script>
 
 <template>
-  <main class="app" @pointerdown.capture="unlockAudio">
+  <main class="app" @pointerdown.capture="unlockAudio" @click.capture="unlockVoice">
     <HomeView v-if="screen === 'home'" @open="openLesson" @settings="go('settings')" />
     <LessonView
       v-else-if="screen === 'lesson' && lesson"

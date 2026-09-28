@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+# 放 API Key 的文件，不要提交
+.env
+.env.*
+!.env.example
