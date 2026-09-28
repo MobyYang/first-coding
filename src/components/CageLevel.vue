@@ -1,6 +1,6 @@
 <script setup>
 // 鸡兔同笼：往笼子里放鸡和兔子，让头数和脚数都对上。
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import ConfettiBurst from './ConfettiBurst.vue'
 import LevelResult from './LevelResult.vue'
 import OwlSays from './OwlSays.vue'
@@ -29,7 +29,6 @@ const result = ref(null)
 const confetti = ref(null)
 let timers = []
 
-const guided = computed(() => Boolean(props.level.tutorial) && index.value === 0)
 const counts = computed(() => cageCounts(cage.value))
 
 const animals = computed(() => [
@@ -44,16 +43,13 @@ function clearTimers() {
   timers.forEach(clearTimeout)
   timers = []
 }
-onMounted(() => {
-  if (guided.value) later(showGuide, 2600)
-})
 onBeforeUnmount(clearTimers)
 
 function say(key, params = {}, mood = 'think') {
   message.value = { key, params, mood }
 }
 
-// 提示：第一次问一个问题帮孩子想，第二次告诉用哪个按钮；从不替孩子放动物
+// 提示：只在点“提示”时出现。第一次问一个问题帮孩子想，第二次告诉用哪个按钮；从不替孩子放动物
 function hintMessage(h) {
   const key = h.level === 1 ? `cage.think.${h.step}` : `cage.hint.${h.step}`
   return t(key, { h: puzzle.value.heads })
@@ -63,12 +59,6 @@ const bubble = computed(() => {
   if (hint.value && phase.value === 'play') return { text: hintMessage(hint.value), mood: 'think' }
   return { text: t(message.value.key, message.value.params), mood: message.value.mood }
 })
-
-function showGuide() {
-  if (phase.value !== 'play') return
-  const h = cageHint(puzzle.value, cage.value)
-  hint.value = h ? { ...h, level: 2 } : null
-}
 
 function act(action) {
   if (phase.value !== 'play') return
@@ -82,11 +72,7 @@ function act(action) {
   cage.value = next
   hint.value = null
   play(action.includes('To') ? 'found' : 'move')
-  if (cageSolved(puzzle.value, next)) {
-    later(solve, 600)
-  } else if (guided.value) {
-    later(showGuide, 700)
-  }
+  if (cageSolved(puzzle.value, next)) later(solve, 600)
 }
 
 function onHint() {
@@ -96,7 +82,7 @@ function onHint() {
   if (!h) return
   const same = hint.value && hint.value.step === h.step
   if (same && hint.value.level >= 2) return
-  if (!guided.value) penalty.value++
+  penalty.value++
   hint.value = { ...h, level: same ? 2 : 1 }
 }
 
@@ -107,7 +93,6 @@ function reset() {
   hint.value = null
   say('msg.reset')
   play('tap')
-  if (guided.value) later(showGuide, 900)
 }
 
 function solve() {

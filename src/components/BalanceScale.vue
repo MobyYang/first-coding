@@ -1,16 +1,14 @@
 <script setup>
 // 一架会晃动的天平（SVG）。左盘放神秘东西和砝码，右盘放一个大砝码。
-// values 不为空时进入“称一称”模式：按孩子猜的重量让天平倾斜。
+// 用道具时天平晃一晃再停稳，让孩子看到“两边一起变，还是平衡的”。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ITEMS } from '../items.js'
-import { leftWeight } from '../core/scale.js'
 import { t } from '../i18n.js'
 
 const props = defineProps({
   scale: { type: Object, required: true },
   items: { type: Array, required: true },
   theme: { type: String, default: 'fruit' },
-  values: { type: Object, default: null },
   event: { type: Object, default: null },
   takeable: { type: Boolean, default: false },
   pulseBlock: { type: Number, default: -1 },
@@ -71,35 +69,21 @@ const placed = computed(() => {
   return out
 })
 
-// —— 倾斜：称一称时按猜的重量倾斜，平时是平衡的 ——
-const weighed = computed(() => {
-  if (!props.values) return null
-  const left = leftWeight(props.scale, props.values)
-  return { left, right: props.scale.right }
-})
-
-const targetAngle = computed(() => {
-  if (!weighed.value) return 0
-  const diff = weighed.value.right - weighed.value.left
-  return 13 * Math.tanh(diff / 5)
-})
-
+// —— 晃动：弹簧一样晃几下再停在平衡的位置 ——
 const angle = ref(0)
 let velocity = 0
 let frame = 0
-let target = 0
-
 function animate() {
   cancelAnimationFrame(frame)
   let last = performance.now()
   const step = (now) => {
     const dt = Math.min(0.032, (now - last) / 1000)
     last = now
-    const accel = -95 * (angle.value - target) - 7 * velocity
+    const accel = -95 * angle.value - 7 * velocity
     velocity += accel * dt
     angle.value += velocity * dt
-    if (Math.abs(angle.value - target) < 0.03 && Math.abs(velocity) < 0.05) {
-      angle.value = target
+    if (Math.abs(angle.value) < 0.03 && Math.abs(velocity) < 0.05) {
+      angle.value = 0
       velocity = 0
       return
     }
@@ -108,23 +92,17 @@ function animate() {
   frame = requestAnimationFrame(step)
 }
 
-function settle(kick = 0) {
-  target = targetAngle.value
-  if (reduceMotion) {
-    angle.value = target
-    return
-  }
+function wobble(kick) {
+  if (reduceMotion) return
   velocity += kick
   animate()
 }
-
-watch(targetAngle, () => settle(), { immediate: true })
 
 // 每次用道具，天平晃一晃再停稳：让孩子看到“还是平衡的”
 watch(
   () => props.event?.key,
   () => {
-    if (props.event?.scaleIds?.includes(props.scale.id)) settle(props.event.kind === 'combine' ? 0 : 38)
+    if (props.event?.scaleIds?.includes(props.scale.id) && props.event.kind !== 'combine') wobble(38)
   },
 )
 
@@ -145,14 +123,6 @@ const floatLabel = computed(() => {
   if (e.kind === 'share') return `÷ ${e.factor}`
   if (e.kind === 'takeAway') return `− ${e.amount}`
   return null
-})
-
-const compare = computed(() => {
-  if (!weighed.value) return null
-  const { left, right } = weighed.value
-  const sign = left === right ? '=' : left > right ? '>' : '<'
-  const text = `${money(left)} ${sign} ${money(right)}`
-  return { text, ok: left === right, width: Math.max(104, text.length * 12 + 28) }
 })
 
 const ariaLabel = computed(() => {
@@ -211,10 +181,6 @@ function take(piece) {
                 <text class="letter" :font-size="22 * p.shrink" y="1">{{ ITEMS[p.item].letter }}</text>
               </template>
               <text v-else class="emoji" :font-size="28 * p.shrink" y="2">{{ ITEMS[p.item].emoji }}</text>
-              <g v-if="values && values[p.item] !== undefined" class="guess-badge">
-                <circle :cx="12 * p.shrink" :cy="11 * p.shrink" r="9" />
-                <text :x="12 * p.shrink" :y="11.5 * p.shrink" font-size="11">{{ values[p.item] }}</text>
-              </g>
             </template>
             <template v-else>
               <path
@@ -242,12 +208,6 @@ function take(piece) {
         </g>
       </g>
       <text v-if="floatLabel" :key="`fr-${event.key}`" class="float-label" x="0" :y="PLATE_TOP - 70">{{ floatLabel }}</text>
-    </g>
-
-    <!-- 称一称的结果 -->
-    <g v-if="compare" class="compare" :class="{ ok: compare.ok }">
-      <rect :x="190 - compare.width / 2" y="36" :width="compare.width" height="32" rx="16" />
-      <text x="190" y="53">{{ compare.text }}</text>
     </g>
   </svg>
 </template>
@@ -364,18 +324,6 @@ function take(piece) {
 .pulse .piece-inner {
   animation: pulse-piece 1.1s ease-in-out infinite;
 }
-.guess-badge circle {
-  fill: #fff;
-  stroke: var(--teal);
-  stroke-width: 2;
-}
-.guess-badge text {
-  font-family: var(--font);
-  font-weight: 700;
-  fill: var(--teal);
-  text-anchor: middle;
-  dominant-baseline: central;
-}
 .float-label {
   font-family: var(--font);
   font-weight: 700;
@@ -386,26 +334,6 @@ function take(piece) {
   paint-order: stroke;
   text-anchor: middle;
   animation: float-up 1.4s ease-out forwards;
-}
-.compare rect {
-  fill: var(--berry-soft);
-  stroke: var(--berry);
-  stroke-width: 2;
-}
-.compare text {
-  font-family: var(--font);
-  font-weight: 700;
-  font-size: 18px;
-  fill: var(--berry);
-  text-anchor: middle;
-  dominant-baseline: central;
-}
-.compare.ok rect {
-  fill: var(--leaf-soft);
-  stroke: var(--leaf);
-}
-.compare.ok text {
-  fill: var(--leaf);
 }
 .bump {
   animation: bump 0.45s ease-out;

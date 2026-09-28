@@ -1,24 +1,19 @@
 <script setup>
-// 屏幕数字键盘：平板上不弹系统键盘，不会挡住题目。
-// 两种用法：在侦探笔记里写“🍎 = ?”，或者用道具时算“20 ÷ 5 = ?”
+// 屏幕数字键盘：用道具时算“20 ÷ 5 = ?”。平板上不弹系统键盘，不会挡住题目。
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { t } from '../i18n.js'
 import { play } from '../sound.js'
 
 const props = defineProps({
-  label: { type: String, default: '' },
-  letter: { type: Boolean, default: false },
-  expression: { type: String, default: '' },
+  expression: { type: String, required: true },
   heading: { type: String, default: '' },
   explain: { type: String, default: '' },
   feedback: { type: String, default: '' },
   attempt: { type: Number, default: 0 },
-  showTip: { type: Boolean, default: false },
-  initial: { type: Number, default: null },
 })
 const emit = defineEmits(['done', 'close', 'tip'])
 
-const text = ref(props.initial == null ? '' : String(props.initial))
+const text = ref('')
 const shaking = ref(false)
 
 // 算错了：清空重新输入，键盘抖一下
@@ -61,15 +56,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div class="pad-backdrop" @click.self="emit('close')">
-    <div class="pad" :class="{ shake: shaking }" role="dialog" aria-modal="true" :aria-label="heading || label" @animationend="shaking = false">
+    <div class="pad" :class="{ shake: shaking }" role="dialog" aria-modal="true" :aria-label="heading || expression" @animationend="shaking = false">
       <div v-if="heading" class="pad-head">
         <p class="pad-heading">{{ heading }}</p>
         <button type="button" class="pad-close" :aria-label="t('tool.cancel')" @click="emit('close')">✕</button>
       </div>
       <p v-if="explain" class="pad-explain">{{ explain }}</p>
       <div class="pad-display">
-        <span v-if="expression" class="pad-expr">{{ expression }}</span>
-        <span v-else class="pad-item" :class="{ letter }">{{ label }}</span>
+        <span class="pad-expr">{{ expression }}</span>
         <span class="pad-eq">=</span>
         <span class="pad-value" :class="{ empty: text === '' }">{{ text === '' ? '?' : text }}</span>
       </div>
@@ -80,7 +74,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <button type="button" class="pad-key" @click="press(0)">0</button>
         <button type="button" class="pad-key ok" aria-label="OK" @click="done">✓</button>
       </div>
-      <button v-if="showTip" type="button" class="pad-tip" @click="emit('tip')">💡 {{ t('calc.tipButton') }}</button>
+      <button type="button" class="pad-tip" @click="emit('tip')">💡 {{ t('calc.tipButton') }}</button>
     </div>
   </div>
 </template>
@@ -149,14 +143,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   font-size: 2.1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-.pad-item {
-  font-family: var(--emoji);
-}
-.pad-item.letter {
-  font-family: var(--font);
-  font-style: italic;
-  color: var(--teal);
 }
 .pad-eq {
   color: var(--ink-soft);
