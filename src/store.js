@@ -22,6 +22,8 @@ function initialLang(settings = {}) {
 export const progress = reactive({
   // 每课最好成绩，例如 { '1': { stars: 3, best: 5 } }
   lessons: saved.lessons || {},
+  // 题库里每课做了几道题、几道一次做对，例如 { '4': { done: 12, right: 9 } }
+  bank: saved.bank || {},
   // sound：音效；voice：老师讲解的声音
   settings: { sound: true, voice: true, ...(saved.settings || {}), lang: initialLang(saved.settings) },
 })
@@ -52,6 +54,15 @@ export function recordLesson(id, stars, best) {
   progress.lessons[id] = { stars: Math.max(before.stars, stars), best: Math.max(before.best, best) }
 }
 
+export function bankOf(id) {
+  return progress.bank[id] || { done: 0, right: 0 }
+}
+
+export function recordBank(id, right) {
+  const before = bankOf(id)
+  progress.bank[id] = { done: before.done + 1, right: before.right + (right ? 1 : 0) }
+}
+
 // 下一课：第一节还没学过的课
 export function nextLesson() {
   return LESSONS.find((lesson) => starsOf(lesson.id) === 0) || null
@@ -59,4 +70,5 @@ export function nextLesson() {
 
 export function resetProgress() {
   progress.lessons = {}
+  progress.bank = {}
 }

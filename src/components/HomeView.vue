@@ -9,7 +9,7 @@ import { t } from '../i18n.js'
 import { play } from '../sound.js'
 import { nextLesson, starsOf } from '../store.js'
 
-const emit = defineEmits(['open', 'settings'])
+const emit = defineEmits(['open', 'bank', 'settings'])
 
 const next = computed(() => nextLesson())
 const examples = Object.fromEntries(
@@ -23,11 +23,17 @@ function open(lesson) {
   play('tap')
   emit('open', lesson.id)
 }
+
+function goBank() {
+  play('tap')
+  emit('bank')
+}
 </script>
 
 <template>
   <div class="home">
     <header class="home-top">
+      <button type="button" class="btn btn-soft btn-small" @click="goBank">📚 {{ t('home.bank') }}</button>
       <button type="button" class="btn btn-soft btn-small" @click="emit('settings')">⚙️ {{ t('home.settings') }}</button>
     </header>
 
@@ -57,6 +63,11 @@ function open(lesson) {
         </button>
       </li>
     </ol>
+
+    <button type="button" class="bank-card" @click="goBank">
+      <span>📚 {{ t('home.bankCard') }}</span>
+      <span class="bank-go">{{ t('home.bank') }} ▶</span>
+    </button>
   </div>
 </template>
 
@@ -71,6 +82,32 @@ function open(lesson) {
 .home-top {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+.bank-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 3px dashed var(--teal);
+  border-radius: 22px;
+  background: #fff;
+  color: var(--teal);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.bank-go {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--teal);
+  color: #fff;
+  white-space: nowrap;
 }
 .hero {
   display: grid;

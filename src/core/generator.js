@@ -152,3 +152,21 @@ export function generateLevel(level, seed) {
   }
   return puzzles
 }
+
+// 题库：一道接一道出新题，想做多少做多少（同一次里尽量不出一样的题）
+export function puzzleStream(level, seed) {
+  const rng = makeRng(seed)
+  const seen = new Set()
+  return function next() {
+    let puzzle = null
+    for (let attempt = 0; attempt < 30; attempt++) {
+      puzzle = generatePuzzle(level, rng)
+      const signature = boardSignature(puzzle.board)
+      if (!seen.has(signature)) {
+        seen.add(signature)
+        break
+      }
+    }
+    return puzzle
+  }
+}

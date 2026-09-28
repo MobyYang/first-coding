@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { checkWithAnswer, explainPuzzle } from '../src/core/explain.js'
-import { MAX_RIGHT, buildPuzzle, generateLevel } from '../src/core/generator.js'
+import { MAX_RIGHT, buildPuzzle, generateLevel, puzzleStream } from '../src/core/generator.js'
 import { LESSONS } from '../src/core/lessons.js'
 import {
   applyCombine,
@@ -545,4 +545,27 @@ describe('lesson 4: look and work it out (看图算)', () => {
     expect(reason({ board: crossed, known: {} }, { method: 'lookCompare', scale: 'A', other: 'B' })).toBe('lookNoContain')
     expect(lookHint({ board: crossed, known: {} })).toBeNull()
   })
+})
+
+describe('practice bank (题库)', () => {
+  for (const lesson of LESSONS) {
+    it(`lesson ${lesson.id}: keeps giving new problems the child can finish`, () => {
+      const engine = engineFor(lesson)
+      const next = puzzleStream(lesson, 7)
+      const seen = new Set()
+      for (let n = 0; n < 40; n++) {
+        const puzzle = next()
+        seen.add(JSON.stringify(puzzle.board.scales.map((s) => [s.counts, s.blocks, s.right])) + puzzle.items.join())
+        let state = engine.start(puzzle)
+        for (let k = 0; k < 12 && !engine.solved(state); k++) {
+          const res = engine.plan(state, engine.hint(state, lesson.methods))
+          expect(res.ok).toBe(true)
+          state = res.step.next
+        }
+        expect(engine.solved(state)).toBe(true)
+        expect(Object.fromEntries(engine.found(state).map((f) => [f.item, f.value]))).toEqual(puzzle.answer)
+      }
+      expect(seen.size).toBeGreaterThanOrEqual(38)
+    })
+  }
 })

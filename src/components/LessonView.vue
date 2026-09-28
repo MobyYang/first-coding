@@ -3,7 +3,8 @@
 // 练习时孩子自己列步骤：每一步先想做什么——选方法、点天平、写数；这一步能这样做，就写出算式，结果由孩子自己算。
 // 不能这样做时只说为什么，不替孩子选；可以擦掉一步换个方法。提示先问下一步怎么想，再说用哪个方法。
 // 老师讲解的声音：例题每一页都读（StepPlayer）；练习时读提示、为什么不能这样做、算错了、做对了。
-import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
+// 题库（bank）：不看例题，直接做题，做完一道点“下一题”一直有新题；每课做了几道记在这台设备上。
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import ConfettiBurst from './ConfettiBurst.vue'
 import LessonResult from './LessonResult.vue'
 import NumberPad from './NumberPad.vue'
@@ -12,19 +13,20 @@ import StepComposer from './StepComposer.vue'
 import StepPlayer from './StepPlayer.vue'
 import WorkSheet from './WorkSheet.vue'
 import WorkTokens from './WorkTokens.vue'
-import { buildPuzzle, generateLevel } from '../core/generator.js'
+import { buildPuzzle, generateLevel, puzzleStream } from '../core/generator.js'
 import { starsFor } from '../core/lessons.js'
 import { randomSeed } from '../core/random.js'
 import { engineFor, exampleWorking } from '../core/styles.js'
 import { t, template } from '../i18n.js'
 import { play } from '../sound.js'
-import { progress, recordLesson } from '../store.js'
+import { progress, recordBank, recordLesson } from '../store.js'
 import { say, stopVoice, toggleVoice } from '../voice.js'
 import { makeWords } from '../words.js'
 
 const props = defineProps({
   lesson: { type: Object, required: true },
   hasNext: { type: Boolean, default: false },
+  bank: { type: Boolean, default: false }, // 题库：不看例题，一道接一道做
 })
 const emit = defineEmits(['home', 'again', 'next'])
 
@@ -38,16 +40,18 @@ const { items: exItems, values: exValues, clues: exClues } = props.lesson.exampl
 const example = buildPuzzle(props.lesson.template, exValues, exClues, exItems)
 const exampleWork = exampleWorking(props.lesson, example)
 const exampleWords = makeWords(example.items, theme)
-const problems = generateLevel(props.lesson, randomSeed())
+// 课：一组 5 道题；题库：一道接一道出新题
+const newProblem = props.bank ? puzzleStream(props.lesson, randomSeed()) : null
+const problems = ref(props.bank ? [newProblem()] : generateLevel(props.lesson, randomSeed()))
 
-const phase = ref('teach')
+const phase = ref(props.bank ? 'practice' : 'teach')
 const index = ref(0)
-const problem = computed(() => problems[index.value])
+const problem = computed(() => problems.value[index.value])
 const words = computed(() => makeWords(problem.value.items, theme))
 const sheet = computed(() => engine.sheet(problem.value))
 
 // —— 孩子列的步骤 ——
-const states = ref([engine.start(problems[0])]) // 每写完一步，多一个“现在的样子”
+const states = ref([engine.start(problems.value[0])]) // 每写完一步，多一个“现在的样子”
 const history = ref([]) // 写完、算对的步骤
 const planned = ref(null) // 列好了、正在算结果的这一步
 const choice = reactive({ method: null, scale: null, other: null, item: null, number: null })
@@ -63,6 +67,7 @@ const solved = ref(false)
 const mistakes = ref(false)
 const helped = ref(false)
 const firstTry = ref(0)
+const doneCount = ref(0) // 这一次做完了几道
 const showExample = ref(false)
 const result = ref(null)
 const confetti = ref(null)
@@ -78,7 +83,11 @@ const canUndo = computed(() => !solved.value && !finished.value && Boolean(plann
 const doneText = computed(() => (!mistakes.value && !helped.value ? t('practice.rightFirst') : t('practice.right')))
 
 const bubble = computed(() => ({
-  title: phase.value === 'teach' ? t('teach.banner') : t('practice.banner', { n: index.value + 1, total: problems.length }),
+  title: props.bank
+    ? t('bank.banner', { n: index.value + 1 })
+    : phase.value === 'teach'
+      ? t('teach.banner')
+      : t('practice.banner', { n: index.value + 1, total: problems.value.length }),
   text: t(`lesson.${props.lesson.id}.idea`),
 }))
 
@@ -239,6 +248,8 @@ function commitStep() {
     solved.value = true
     message.value = null
     if (!mistakes.value && !helped.value) firstTry.value++
+    doneCount.value++
+    if (props.bank) recordBank(props.lesson.id, !mistakes.value && !helped.value)
     play('solved')
     say(doneText.value)
     confetti.value?.fire()
@@ -294,18 +305,32 @@ function openExample() {
 
 function nextProblem() {
   stopVoice()
-  if (index.value < problems.length - 1) {
+  if (props.bank) {
+    problems.value = [...problems.value, newProblem()]
     index.value++
     resetProblem()
     play('tap')
     window.scrollTo({ top: 0 })
     return
   }
-  const stars = starsFor(firstTry.value, problems.length)
+  if (index.value < problems.value.length - 1) {
+    index.value++
+    resetProblem()
+    play('tap')
+    window.scrollTo({ top: 0 })
+    return
+  }
+  const stars = starsFor(firstTry.value, problems.value.length)
   recordLesson(props.lesson.id, stars, firstTry.value)
   result.value = { stars, firstTry: firstTry.value }
   phase.value = 'done'
 }
+
+// 题库一进来就是第 1 题：先说练习怎么做
+if (props.bank) resetProblem()
+onMounted(() => {
+  if (props.bank) say(message.value.text)
+})
 
 onBeforeUnmount(() => {
   clearTimeout(pause)
@@ -344,16 +369,17 @@ const padLine = computed(() => {
 })
 
 const title = computed(() => `${t('home.lesson', { n: props.lesson.id })} · ${t(`lesson.${props.lesson.id}.title`)}`)
-const eyebrow = computed(() =>
-  phase.value === 'teach' ? t('top.teach') : t('top.practice', { n: index.value + 1, total: problems.length }),
-)
+const eyebrow = computed(() => {
+  if (props.bank) return t('bank.eyebrow', { done: doneCount.value, right: firstTry.value })
+  return phase.value === 'teach' ? t('top.teach') : t('top.practice', { n: index.value + 1, total: problems.value.length })
+})
 </script>
 
 <template>
   <div class="lesson">
     <header class="topbar">
       <button type="button" class="btn btn-soft btn-small" @click="emit('home')">
-        ← <span class="hide-narrow">{{ t('top.home') }}</span>
+        ← <span class="hide-narrow">{{ bank ? t('top.bank') : t('top.home') }}</span>
       </button>
       <div class="topbar-title">
         <p class="eyebrow">{{ eyebrow }}</p>
@@ -433,7 +459,7 @@ const eyebrow = computed(() =>
           <button type="button" class="btn btn-soft" @click="openExample">📖 {{ t('practice.example') }}</button>
         </template>
         <button v-else type="button" class="btn btn-primary" @click="nextProblem">
-          {{ index < problems.length - 1 ? t('practice.next') : t('practice.finish') }} ▶
+          {{ bank || index < problems.length - 1 ? t('practice.next') : t('practice.finish') }} ▶
         </button>
       </footer>
     </template>
