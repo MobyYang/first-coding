@@ -118,12 +118,14 @@ function money(value) {
   return props.theme === 'shop' ? t('unit.yuan', { v: value }) : String(value)
 }
 
-const floatLabel = computed(() => {
+// 两边飘出这一步做的事：两边一样（“− 3”“÷ 3”），也可以左右不同（左边“− (🍎 + 🍌)”，右边“− 9”）
+const floats = computed(() => {
   const e = props.event
-  if (!e || !e.scaleIds?.includes(props.scale.id)) return null
-  if (e.kind === 'share') return `÷ ${e.factor}`
-  if (e.kind === 'takeAway') return `− ${e.amount}`
-  return null
+  if (!e || !e.scaleIds?.includes(props.scale.id)) return { left: null, right: null }
+  if (e.left !== undefined || e.right !== undefined) return { left: e.left ?? null, right: e.right ?? null }
+  if (e.kind === 'share') return { left: `÷ ${e.factor}`, right: `÷ ${e.factor}` }
+  if (e.kind === 'takeAway') return { left: `− ${e.amount}`, right: `− ${e.amount}` }
+  return { left: null, right: null }
 })
 
 const ariaLabel = computed(() => {
@@ -188,7 +190,7 @@ const ariaLabel = computed(() => {
           </g>
         </g>
       </TransitionGroup>
-      <text v-if="floatLabel" :key="`fl-${event.key}`" class="float-label" x="0" :y="PLATE_TOP - 70">{{ floatLabel }}</text>
+      <text v-if="floats.left" :key="`fl-${event.key}`" class="float-label" x="0" :y="PLATE_TOP - 70">{{ floats.left }}</text>
     </g>
 
     <!-- 右盘 -->
@@ -202,7 +204,7 @@ const ariaLabel = computed(() => {
           <text class="weight-text" :font-size="theme === 'shop' ? 15 : money(scale.right).length > 2 ? 17 : 21" y="6">{{ money(scale.right) }}</text>
         </g>
       </g>
-      <text v-if="floatLabel" :key="`fr-${event.key}`" class="float-label" x="0" :y="PLATE_TOP - 70">{{ floatLabel }}</text>
+      <text v-if="floats.right" :key="`fr-${event.key}`" class="float-label" x="0" :y="PLATE_TOP - 70">{{ floats.right }}</text>
     </g>
 
   </svg>

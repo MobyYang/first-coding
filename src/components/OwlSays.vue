@@ -1,6 +1,7 @@
 <script setup>
 // 猫头鹰老师：会眨眼、戴眼镜的猫头鹰 + 说话气泡。mood: happy / think / wow / oops
 defineProps({
+  title: { type: String, default: '' }, // 气泡里加粗的第一句，比如“这是例题”
   text: { type: String, default: '' },
   mood: { type: String, default: 'think' },
   size: { type: Number, default: 64 },
@@ -45,7 +46,10 @@ defineProps({
         <path d="M40 92 l-4 4 M44 92 v5 M58 92 l4 4 M56 92 v5" stroke="#ff9f1c" stroke-width="3" stroke-linecap="round" />
       </g>
     </svg>
-    <p v-if="text" class="bubble" aria-live="polite">{{ text }}</p>
+    <p v-if="text || title" class="bubble" aria-live="polite">
+      <strong v-if="title" class="bubble-title">{{ title }}</strong>
+      <span v-if="text">{{ text }}</span>
+    </p>
   </div>
 </template>
 
@@ -94,6 +98,10 @@ defineProps({
   color: var(--ink);
   min-width: 0;
   text-wrap: pretty;
+}
+.bubble-title {
+  display: block;
+  color: var(--coral-dark);
 }
 .bubble::before {
   content: '';

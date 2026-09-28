@@ -214,10 +214,12 @@ describe('explanations', () => {
   })
 })
 
-// 演算：每一行算式代入答案都成立；每一步都有孩子要填的空；一步一步算出全部答案
+// 演算：每一行算式代入答案都成立；竖式里左边加（减）左边、右边加（减）右边；
+// 每一步都有孩子要填的空；一步一步做下来，算出全部答案
 function expectWorking(puzzle, lesson) {
   const work = buildWorking(puzzle, lesson.tools)
   expect(work).not.toBeNull()
+  const weigh = (counts) => Object.entries(counts).reduce((sum, [item, n]) => sum + n * puzzle.answer[item], 0)
   const holds = (tokens) => {
     const values = lineValues(tokens, puzzle.answer)
     expect(values.length).toBeGreaterThan(1)
@@ -226,10 +228,32 @@ function expectWorking(puzzle, lesson) {
   work.given.forEach((row) => holds(row.tokens))
   const found = {}
   for (const step of work.steps) {
-    holds(step.line)
     const ids = new Set()
-    if (step.labelNumber?.blank) ids.add(step.labelNumber.blank)
-    for (const tok of step.line) if (tok.blank) ids.add(tok.blank)
+    if (step.titleNumber?.blank) ids.add(step.titleNumber.blank)
+    for (const line of step.lines) {
+      if (line.kind === 'eq') {
+        holds(line.tokens)
+        for (const tok of line.tokens) {
+          if (tok.type === 'ref') expect(ids.has(tok.of)).toBe(true)
+          if (tok.blank) ids.add(tok.blank)
+        }
+        continue
+      }
+      const sign = line.op === '+' ? 1 : -1
+      const [top, bottom] = line.rows
+      for (const row of line.rows) expect(weigh(row.counts)).toBe(row.right)
+      const expected = {}
+      for (const item of new Set([...Object.keys(top.counts), ...Object.keys(bottom.counts)])) {
+        const n = (top.counts[item] || 0) + sign * (bottom.counts[item] || 0)
+        expect(n).toBeGreaterThanOrEqual(0)
+        if (n) expected[item] = n
+      }
+      expect(line.result.counts).toEqual(expected)
+      expect(line.result.right.value).toBe(top.right + sign * bottom.right)
+      expect(weigh(line.result.counts)).toBe(line.result.right.value)
+      ids.add(line.result.right.blank)
+      for (const id of Object.values(line.result.countBlanks)) ids.add(id)
+    }
     expect(step.blanks.length).toBeGreaterThan(0)
     expect(step.blanks.map((b) => b.id).sort()).toEqual([...ids].sort())
     for (const blank of step.blanks) {
@@ -237,20 +261,30 @@ function expectWorking(puzzle, lesson) {
       expect(blank.value).toBeGreaterThan(0)
       expect(blank.value).toBeLessThan(100) // 数字键盘最多填两位数
     }
-    for (const tok of step.line) if (tok.type === 'ref') expect(tok.value).toBe(step.labelNumber.value)
+    expect(step.visual.after).toBeTruthy()
     if (step.found) found[step.found.item] = step.found.value
   }
   expect(found).toEqual(puzzle.answer)
   return work
 }
 
-const lineText = (tokens) =>
+const tokensText = (tokens) =>
   tokens
     .map((tok) => {
       if (tok.type === 'item') return tok.count > 1 ? `${tok.count}${tok.item}` : tok.item
       return tok.type === 'op' ? tok.text : String(tok.value)
     })
     .join(' ')
+const countsText = (counts) =>
+  Object.entries(counts)
+    .map(([item, n]) => (n > 1 ? `${n}${item}` : item))
+    .join(' + ')
+const linesText = (step) =>
+  step.lines.map((line) =>
+    line.kind === 'eq'
+      ? `${line.tag}: ${tokensText(line.tokens)}`
+      : `${line.rows[0].tag} ${line.op} ${line.rows[1].tag}: ${countsText(line.result.counts)} = ${line.result.right.value}`,
+  )
 
 function exampleOf(id) {
   const lesson = LESSONS.find((l) => l.id === id)
@@ -269,34 +303,48 @@ describe('working (演算)', () => {
     })
   }
 
-  it('writes substitution in place and keeps every step on the page', () => {
+  it('writes both sides of every step, and substitutes in place', () => {
     const { lesson, puzzle } = exampleOf('3')
     const work = buildWorking(puzzle, lesson.tools)
-    expect(work.given.map((row) => lineText(row.tokens))).toEqual(['2apple = 10', 'apple + banana = 8'])
-    expect(work.steps.map((step) => [step.scaleId, lineText(step.line)])).toEqual([
-      ['A', 'apple = 10 ÷ 2 = 5'],
-      ['B', '5 + banana = 8'],
-      ['B', 'banana = 8 − 5 = 3'],
+    expect(work.given.map((row) => tokensText(row.tokens))).toEqual(['2apple = 10', 'apple + banana = 8'])
+    expect(work.steps.map(linesText)).toEqual([
+      ['A: 2apple ÷ 2 = 10 ÷ 2', 'A: apple = 5'],
+      ['B: apple + banana = 8', 'B: 5 + banana = 8'],
+      ['B: 5 + banana − 5 = 8 − 5', 'B: banana = 3'],
     ])
     expect(work.steps.map((step) => step.blanks.map((b) => `${b.id}=${b.value}`))).toEqual([['n=2', 'r=5'], ['v=5'], ['a=5', 'r=3']])
   })
 
-  it('adds two scales left to left and right to right', () => {
+  it('adds and subtracts two scales in columns', () => {
     const { lesson, puzzle } = exampleOf('5')
     const work = buildWorking(puzzle, lesson.tools)
-    expect(work.steps.map((step) => [step.scaleId, lineText(step.line)])).toEqual([
-      ['C', '3apple + 3banana = 13 + 14 = 27'],
-      ['C', 'apple + banana = 27 ÷ 3 = 9'],
-      ['A', 'apple = 13 − 9 = 4'],
-      ['C', '4 + banana = 9'],
-      ['C', 'banana = 9 − 4 = 5'],
+    expect(work.steps.map(linesText)).toEqual([
+      ['A + B: 3apple + 3banana = 27'],
+      ['C: ( 3apple + 3banana ) ÷ 3 = 27 ÷ 3', 'C: apple + banana = 9'],
+      ['A − C: apple = 4'],
+      ['C: apple + banana = 9', 'C: 4 + banana = 9'],
+      ['C: 4 + banana − 4 = 9 − 4', 'C: banana = 5'],
     ])
     expect(work.steps[0].blanks.map((b) => b.id)).toEqual(['c-apple', 'c-banana', 'r'])
+    expect(work.steps[2].lines[0].rows.map((row) => countsText(row.counts))).toEqual(['2apple + banana', 'apple + banana'])
   })
 
   it('writes 2 × 4 when two of the same thing are replaced', () => {
     const board = makeBoard(['apple', 'banana'], [makeScale('A', { apple: 3 }, 12), makeScale('B', { apple: 2, banana: 1 }, 13)])
     const work = buildWorking({ items: ['apple', 'banana'], board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
-    expect(work.steps.map((step) => lineText(step.line))).toEqual(['apple = 12 ÷ 3 = 4', '2 × 4 + banana = 13', 'banana = 13 − 8 = 5'])
+    expect(work.steps.map(linesText)).toEqual([
+      ['A: 3apple ÷ 3 = 12 ÷ 3', 'A: apple = 4'],
+      ['B: 2apple + banana = 13', 'B: 2 × 4 + banana = 13'],
+      ['B: 2 × 4 + banana − 8 = 13 − 8', 'B: banana = 5'],
+    ])
+  })
+
+  it('splits a scale into whole sets before swapping them', () => {
+    const board = makeBoard(['apple', 'banana'], [makeScale('A', { apple: 1, banana: 1 }, 9), makeScale('B', { apple: 3, banana: 2 }, 22)])
+    const work = buildWorking({ items: ['apple', 'banana'], board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
+    expect(work.steps.map(linesText).slice(0, 2)).toEqual([
+      ['B: 3apple + 2banana = 22', 'B: apple + ( apple + banana ) + ( apple + banana ) = 22', 'B: apple + 9 + 9 = 22'],
+      ['B: apple + 9 + 9 − 18 = 22 − 18', 'B: apple = 4'],
+    ])
   })
 })

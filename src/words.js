@@ -1,4 +1,4 @@
-// 把天平和演算写成孩子能读懂的话：演算里每一步“做什么”、每个空的提示、答案和检查。
+// 把天平和演算写成孩子能读懂的话：每一步的标题和道理、天平上飘的字、每个空的提示、答案和检查。
 // 写法：一种东西说“3 个 🍎”；几种东西说“🍎 和 2 个 🍌”；括号里的一组写成算式（🍎 + 2🍌）。
 import { itemLabel } from './items.js'
 import { hasKey, lang, t } from './i18n.js'
@@ -54,8 +54,8 @@ export function makeWords(items, theme) {
     return `${parts.join(' + ')} = ${row.left}${row.ok ? ' ✓' : ''}`
   }
 
-  // 演算里的一步“做什么”：A：两边同时 ÷（后面接着那个数）、B 比 A 多 1 个 🍎……
-  function labelText(step) {
+  // 这一步的标题：做什么（C 的两边同时 ÷ 后面接着那个数、A 减去 C……）
+  function titleText(step) {
     const info = step.info
     switch (step.kind) {
       case 'share':
@@ -63,13 +63,63 @@ export function makeWords(items, theme) {
       case 'takeAway':
         return t('work.takeAway', { id: info.id })
       case 'compare':
-        return t('work.compare', { dst: info.dst, src: info.src, extra: extraWords(info.extra) })
+        return t('work.compare', { dst: info.dst, src: info.src })
       case 'swapKnown':
         return t('work.swapKnown', { item: itemLabel(info.item), value: money(info.value), dst: info.dst })
       case 'swapBundle':
-        return t('work.swapBundle', { dst: info.dst, times: info.times, group: groupOf(info.group) })
+        return t('work.swapBundle', { dst: info.dst, group: groupOf(info.group), value: money(info.value) })
       default:
         return t('work.combine', { a: info.a, b: info.b })
+    }
+  }
+
+  // 这一步为什么可以这样做（讲解时写在这一步里）
+  function whyText(step) {
+    const info = step.info
+    switch (step.kind) {
+      case 'share': {
+        const kinds = items.filter((item) => info.counts[item])
+        return kinds.length === 1
+          ? t('work.why.shareOne', { id: info.id, n: info.n, item: itemLabel(kinds[0]) })
+          : t('work.why.shareGroup', { id: info.id, n: info.n, group: groupOf(info.group) })
+      }
+      case 'takeAway': {
+        const params = { id: info.id, items: itemsWords(info.counts), a: money(info.amount) }
+        return info.blocks.length > 1
+          ? t('work.why.takeAwayMany', { ...params, blocks: info.blocks.map(money).join(' + ') })
+          : t('work.why.takeAway', params)
+      }
+      case 'compare':
+        return t('work.why.compare', { dst: info.dst, src: info.src, common: itemsWords(info.common), extra: extraWords(info.extra) })
+      case 'swapKnown': {
+        const params = { item: itemLabel(info.item), value: money(info.value), dst: info.dst, n: info.times }
+        return t(info.times > 1 ? 'work.why.swapKnownMany' : 'work.why.swapKnown', params)
+      }
+      case 'swapBundle':
+        return t('work.why.swapBundle', { dst: info.dst, times: info.times, group: groupOf(info.group), value: money(info.value) })
+      default:
+        return t('work.why.combine')
+    }
+  }
+
+  // 天平两边飘出的字：这一步对天平做了什么
+  function floatText(step) {
+    const info = step.info
+    switch (step.kind) {
+      case 'share':
+        return { left: `÷ ${info.n}`, right: `÷ ${info.n}` }
+      case 'takeAway':
+        return { left: `− ${info.amount}`, right: `− ${info.amount}` }
+      case 'compare': {
+        const group = groupOf(info.common)
+        return { left: `− ${group.includes('+') ? `(${group})` : group}`, right: `− ${info.small}` }
+      }
+      case 'swapKnown':
+        return { left: `${itemLabel(info.item)} → ${info.value}`, right: null }
+      case 'swapBundle':
+        return { left: `(${groupOf(info.group)}) → ${info.value}`, right: null }
+      default:
+        return { left: null, right: null }
     }
   }
 
@@ -89,10 +139,6 @@ export function makeWords(items, theme) {
         return t('work.hint.takeAmount', { id: info.id, items: itemsWords(info.counts) })
       case 'minus':
         return t('work.hint.minus', { total: info.total, amount: info.amount })
-      case 'big':
-        return t('work.hint.big', { dst: info.dst })
-      case 'small':
-        return t('work.hint.small', { src: info.src })
       case 'diff':
         return t('work.hint.diff', { big: info.big, small: info.small })
       case 'swapValue':
@@ -106,5 +152,5 @@ export function makeWords(items, theme) {
     }
   }
 
-  return { groupOf, itemsWords, extraWords, tt, goalText, answersText, checkLine, labelText, hintText }
+  return { groupOf, itemsWords, extraWords, tt, goalText, answersText, checkLine, titleText, whyText, floatText, hintText }
 }

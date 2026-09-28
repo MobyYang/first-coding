@@ -1,5 +1,5 @@
 <script setup>
-// 演算里的一行：2🍎 = 11 − 3 = 8。
+// 演算里的一行：2🍎 + 3 − 3 = 11 − 3。
 // show：所有数都写出来，算出来的数用绿色标出；do：要孩子填的数变成可以点的空。
 import { ITEMS } from '../items.js'
 
@@ -32,7 +32,7 @@ const isBlank = (tok) => props.mode === 'do' && tok.blank
 <template>
   <span class="tokens">
     <template v-for="(tok, i) in tokens" :key="i">
-      <span v-if="tok.type === 'op'" class="tok-op">{{ tok.text }}</span>
+      <span v-if="tok.type === 'op'" class="tok-op" :class="{ open: tok.text === '(', close: tok.text === ')' }">{{ tok.text }}</span>
 
       <span v-else-if="tok.type === 'item'" class="tok-term">
         <button
@@ -86,6 +86,12 @@ const isBlank = (tok) => props.mode === 'do' && tok.blank
 .tok-op {
   color: var(--ink-soft);
   font-weight: 600;
+}
+.tok-op.open {
+  margin-right: -6px;
+}
+.tok-op.close {
+  margin-left: -6px;
 }
 .tok-num {
   font-weight: 700;
