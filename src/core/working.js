@@ -1,44 +1,9 @@
-// 演算过程：把每一步写成孩子在本子上会写的样子。
+// 例题的演算：按解题程序把每一步写成孩子在本子上会写的样子（练习时孩子自己列步骤，见 practice.js）。
 // 每一步：第几步、做什么（标题）、几行算式（数字步骤）。加起来、减掉用竖式写，🍎 对着 🍎、🍌 对着 🍌。
-// 前面写过的步骤一直留着；讲解时所有数都写出来，练习时标了 blank 的数留空，让孩子自己填。
+// 前面写过的步骤一直留着；标了 blank 的数是这一步算出来的，例题里用绿色标出。
 import { checkWithAnswer, explainPuzzle } from './explain.js'
 import { getScale } from './scale.js'
-
-// 算式里的记号：
-//   { type: 'item', item, count, blank? }  2🍎（有 blank：个数要孩子填）
-//   { type: 'op', text }                   + − × ÷ = ( )
-//   { type: 'num', value, blank? }         一个数（有 blank：要孩子填）
-//   { type: 'ref', of, value }             和同一步里那个空是同一个数，孩子填了才显示
-// 一行算式：{ kind: 'eq', tag, tokens }
-// 竖式：{ kind: 'column', op: '+' | '−', rows: [{ tag, counts, right }], result: { tag, counts, countBlanks, right } }
-const op = (text) => ({ type: 'op', text })
-const num = (value, blank) => (blank ? { type: 'num', value, blank } : { type: 'num', value })
-const ref = (of, value) => ({ type: 'ref', of, value })
-const term = (item, count) => ({ type: 'item', item, count })
-
-// 写完这一步以后，这架天平在后面的步骤里就这样写（去掉空，数都写出来）
-const plain = (tokens) => tokens.map((tok) => (tok.type === 'ref' || tok.blank ? (tok.type === 'item' ? term(tok.item, tok.count) : num(tok.value)) : tok))
-
-function joinPlus(parts) {
-  const out = []
-  parts.forEach((part, i) => {
-    if (i > 0) out.push(op('+'))
-    out.push(...(Array.isArray(part) ? part : [part]))
-  })
-  return out
-}
-
-// 左边：东西按题目里的顺序写，砝码写在后面
-function leftTokens(items, counts, blocks = []) {
-  const terms = items.filter((item) => counts[item]).map((item) => term(item, counts[item]))
-  return joinPlus([...terms, ...blocks.map((w) => num(w))])
-}
-
-function inParens(tokens) {
-  return tokens.some((tok) => tok.type === 'op' && tok.text === '+') ? [op('('), ...tokens, op(')')] : tokens
-}
-
-const eq = (tag, left, right) => ({ kind: 'eq', tag, tokens: [...left, op('='), ...right] })
+import { eq, inParens, joinPlus, leftTokens, num, op, plain, ref, term } from './tokens.js'
 
 // display：每架天平现在写成什么样（代入以后写成 4 + 🍌，后面接着这样写）
 function buildStep(items, step, before, display) {
@@ -230,37 +195,4 @@ export function buildWorking(puzzle, tools) {
     answer: puzzle.answer,
     checks: checkWithAnswer(puzzle.board, puzzle.answer),
   }
-}
-
-// 把答案代进一行算式，算出每个等号之间的值（测试用它确认每一行都成立）
-export function lineValues(tokens, answer) {
-  const parts = [[]]
-  for (const tok of tokens) {
-    if (tok.type === 'op' && tok.text === '=') parts.push([])
-    else parts[parts.length - 1].push(tok)
-  }
-  return parts.map((part) => {
-    let i = 0
-    const isOp = (...texts) => i < part.length && part[i].type === 'op' && texts.includes(part[i].text)
-    function factor() {
-      const tok = part[i++]
-      if (tok.type === 'op' && tok.text === '(') {
-        const value = sum()
-        i++ // ')'
-        return value
-      }
-      return tok.type === 'item' ? tok.count * answer[tok.item] : tok.value
-    }
-    function product() {
-      let value = factor()
-      while (isOp('×', '÷')) value = part[i++].text === '×' ? value * factor() : value / factor()
-      return value
-    }
-    function sum() {
-      let value = product()
-      while (isOp('+', '−')) value = part[i++].text === '+' ? value + product() : value - product()
-      return value
-    }
-    return sum()
-  })
 }

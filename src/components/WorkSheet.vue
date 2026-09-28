@@ -2,7 +2,7 @@
 // 演算纸：先写题目（天平和算式），再一步一步往下写。
 // 每一步：第几步 + 做什么；例题里再写一句为什么；这一步的天平就画在这一步里，看算式的时候就能看到天平怎么变。
 // 前面写过的步骤一直留着，孩子能看出每一步是从哪一行来的。
-// show：例题里老师写好的；do：练习时当前这一步留着空，让孩子填。
+// show：例题里老师写好的；do：练习时孩子自己列的步骤，正在算的这一步留着空让孩子填，下一步在 composer 里列。
 import { computed, nextTick, ref, watch } from 'vue'
 import BalanceScale from './BalanceScale.vue'
 import ColumnBlock from './ColumnBlock.vue'
@@ -48,10 +48,10 @@ const ticked = (i) => props.mode === 'do' && (i < props.upto || (i === current.v
 // 新写出来的一步滚到看得见的地方
 const root = ref(null)
 watch(
-  () => [props.upto, props.done],
+  () => [props.upto, props.done, props.work.steps.length],
   async () => {
     await nextTick()
-    const el = root.value?.querySelector(props.done ? '.sheet-answer' : '.step.current')
+    const el = root.value?.querySelector(props.done ? '.sheet-answer' : '.step.current, .composer')
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   },
 )
@@ -67,7 +67,7 @@ watch(
     <!-- 题目 -->
     <div class="problem">
       <p class="problem-label">{{ t('work.problem') }}</p>
-      <div v-if="scales" class="problem-scales">
+      <div v-if="scales" class="problem-scales" :class="{ single: work.board.scales.length === 1 }">
         <figure v-for="scale in work.board.scales" :key="scale.id" class="mini-scale">
           <span class="scale-tag">{{ t('scale.name', { id: scale.id }) }}</span>
           <BalanceScale :scale="scale" :items="work.items" :theme="theme" />
@@ -114,6 +114,9 @@ watch(
         </div>
       </li>
     </ol>
+
+    <!-- 练习时：孩子自己列下一步 -->
+    <slot name="composer" />
 
     <!-- 答案和检查 -->
     <div v-if="done" class="sheet-answer">
@@ -179,9 +182,14 @@ watch(
 }
 .problem-scales {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 230px));
-  justify-content: center;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  width: 100%;
+  max-width: 500px;
+  margin-inline: auto;
   gap: 10px;
+}
+.problem-scales.single {
+  max-width: 250px;
 }
 .mini-scale {
   margin: 0;

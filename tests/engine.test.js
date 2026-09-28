@@ -19,7 +19,9 @@ import {
   weighAll,
 } from '../src/core/scale.js'
 import { planSolution } from '../src/core/solver.js'
-import { buildWorking, lineValues } from '../src/core/working.js'
+import { lineValues } from '../src/core/tokens.js'
+import { buildWorking } from '../src/core/working.js'
+import { foundList, nextStepHint, planStep, practiceSolved, startPractice } from '../src/core/practice.js'
 
 // 行列式不为 0 ⇔ 方程组只有一组解
 function determinant(matrix) {
@@ -346,5 +348,113 @@ describe('working (演算)', () => {
       ['B: 3apple + 2banana = 22', 'B: apple + ( apple + banana ) + ( apple + banana ) = 22', 'B: apple + 9 + 9 = 22'],
       ['B: apple + 9 + 9 − 18 = 22 − 18', 'B: apple = 4'],
     ])
+  })
+})
+
+// 孩子自己列的一步：每一行代入答案都成立，竖式加减都对，结果里要算的数都留了空
+function expectStepLines(step, answer) {
+  const weigh = (counts) => Object.entries(counts).reduce((sum, [item, n]) => sum + n * answer[item], 0)
+  const ids = new Set()
+  for (const line of step.lines) {
+    if (line.kind === 'eq') {
+      const values = lineValues(line.tokens, answer)
+      for (const v of values) expect(v).toBe(values[0])
+      for (const tok of line.tokens) if (tok.blank) ids.add(tok.blank)
+      continue
+    }
+    const sign = line.op === '+' ? 1 : -1
+    const [top, bottom] = line.rows
+    expect(line.result.right.value).toBe(top.right + sign * bottom.right)
+    expect(weigh(line.result.counts)).toBe(line.result.right.value)
+    ids.add(line.result.right.blank)
+    for (const id of Object.values(line.result.countBlanks)) ids.add(id)
+  }
+  expect(step.blanks.map((b) => b.id).sort()).toEqual([...ids].sort())
+  for (const blank of step.blanks) {
+    expect(Number.isInteger(blank.value)).toBe(true)
+    expect(blank.value).toBeGreaterThan(0)
+    expect(blank.value).toBeLessThan(100)
+  }
+}
+
+// 一直照着提示做，能不能做完
+function followHints(puzzle, lesson, state = startPractice(puzzle)) {
+  for (let n = 0; n < 12 && !practiceSolved(state); n++) {
+    const hint = nextStepHint(state, lesson.methods)
+    expect(hint).toBeTruthy()
+    expect(lesson.methods).toContain(hint.method)
+    const res = planStep(state, hint)
+    expect(res.ok).toBe(true)
+    expectStepLines(res.step, puzzle.answer)
+    state = res.step.next
+  }
+  expect(practiceSolved(state)).toBe(true)
+  expect(Object.fromEntries(foundList(state).map((f) => [f.item, f.value]))).toEqual(puzzle.answer)
+  return state
+}
+
+const pair = (a, b) => makeBoard(['apple', 'banana'], [makeScale('A', a.counts, a.right, a.blocks), makeScale('B', b.counts, b.right, b.blocks)])
+const reasonOf = (board, choice) => planStep(startPractice({ board }), choice).reason?.code
+
+describe('practice: the child writes every step', () => {
+  for (const lesson of LESSONS) {
+    it(`lesson ${lesson.id}: a child who follows the step hints always finishes`, () => {
+      followHints(exampleOf(lesson.id).puzzle, lesson)
+      for (let seed = 1; seed <= 100; seed++) {
+        for (const problem of generateLevel(lesson, seed)) followHints(problem, lesson)
+      }
+    })
+  }
+
+  it('says why a step cannot be done, without choosing for the child', () => {
+    const one = makeBoard(['apple'], [makeScale('A', { apple: 2 }, 11, [3])])
+    expect(reasonOf(one, { method: 'share', scale: 'A', number: 2 })).toBe('shareBlocks')
+    expect(reasonOf(one, { method: 'takeAway', scale: 'A', number: 5 })).toBe('takeAmount')
+    expect(reasonOf(one, { method: 'takeAway', scale: 'A' })).toBe('pick')
+    const plainOne = makeBoard(['apple'], [makeScale('A', { apple: 3 }, 12)])
+    expect(reasonOf(plainOne, { method: 'share', scale: 'A', number: 2 })).toBe('shareN')
+    expect(reasonOf(plainOne, { method: 'share', scale: 'A', number: 1 })).toBe('shareOne')
+    expect(reasonOf(plainOne, { method: 'takeAway', scale: 'A', number: 3 })).toBe('takeNone')
+
+    const lesson5 = pair({ counts: { apple: 2, banana: 1 }, right: 13 }, { counts: { apple: 1, banana: 2 }, right: 14 })
+    expect(reasonOf(lesson5, { method: 'subtract', scale: 'A', other: 'B' })).toBe('subtractMore')
+    expect(reasonOf(lesson5, { method: 'subtract', scale: 'B', other: 'A' })).toBe('subtractMore')
+    expect(reasonOf(lesson5, { method: 'subtract', scale: 'A', other: 'A' })).toBe('same')
+    expect(reasonOf(lesson5, { method: 'substitute', scale: 'A', item: 'apple' })).toBe('subNothing')
+    expect(planStep(startPractice({ board: lesson5 }), { method: 'add', scale: 'A', other: 'B' }).ok).toBe(true)
+
+    const known = pair({ counts: { apple: 1 }, right: 4 }, { counts: { banana: 2 }, right: 10 })
+    expect(reasonOf(known, { method: 'substitute', scale: 'A', item: 'apple' })).toBe('subSelf')
+    expect(reasonOf(known, { method: 'substitute', scale: 'B', item: 'apple' })).toBe('subTarget')
+    const same = pair({ counts: { apple: 1, banana: 1 }, right: 9 }, { counts: { apple: 1, banana: 1 }, right: 9 })
+    expect(reasonOf(same, { method: 'subtract', scale: 'A', other: 'B' })).toBe('subtractSame')
+    const withWeight = pair({ counts: { apple: 1, banana: 1 }, right: 9 }, { counts: { apple: 2, banana: 1 }, blocks: [2], right: 15 })
+    expect(reasonOf(withWeight, { method: 'subtract', scale: 'B', other: 'A' })).toBe('columnBlocks')
+  })
+
+  it('lets the child take a different road, and still helps from where the child is', () => {
+    const { lesson, puzzle } = exampleOf('5')
+    let state = startPractice(puzzle)
+    // 例题是先 A − C；孩子改成先 B − C，算出 🍌
+    for (const choice of [
+      { method: 'add', scale: 'A', other: 'B' },
+      { method: 'share', scale: 'C', number: 3 },
+      { method: 'subtract', scale: 'B', other: 'C' },
+    ]) {
+      const res = planStep(state, choice)
+      expect(res.ok).toBe(true)
+      state = res.step.next
+    }
+    expect(foundList(state)).toEqual([{ item: 'banana', value: 5, scaleId: 'B' }])
+    expect(nextStepHint(state, lesson.methods)).toMatchObject({ method: 'substitute', item: 'banana' })
+    followHints(puzzle, lesson, state)
+  })
+
+  it('writes the step the child chose, with the results left for the child', () => {
+    const board = makeBoard(['apple'], [makeScale('A', { apple: 4 }, 20)])
+    const res = planStep(startPractice({ board }), { method: 'share', scale: 'A', number: 2 })
+    expect(res.ok).toBe(true)
+    expect(res.step.lines.map((line) => tokensText(line.tokens))).toEqual(['4apple ÷ 2 = 20 ÷ 2', '2apple = 10'])
+    expect(res.step.blanks.map((b) => `${b.id}=${b.value}`)).toEqual(['c-apple=2', 'r=10'])
   })
 })

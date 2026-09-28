@@ -1,20 +1,22 @@
 <script setup>
-// 一节课：先跟老师学一道例题（一步一步演算），再照着例题做 5 道练习。
-// 练习也是一步一步演算：每一步的标题和算式都写好了，要算的数空着，孩子自己填。
-// 一步填对了，这一步的天平跟着变，再写下一步；最后一步算出来的就是答案。
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+// 一节课：先跟老师学一道例题（一步一步演算），再做 5 道练习。
+// 练习时孩子自己列步骤：每一步先想做什么——选方法、点天平、写数；这一步能这样做，就写出算式，结果由孩子自己算。
+// 不能这样做时只说为什么，不替孩子选；可以擦掉一步换个方法。提示先问下一步怎么想，再说用哪个方法。
+import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
 import ConfettiBurst from './ConfettiBurst.vue'
 import LessonResult from './LessonResult.vue'
 import NumberPad from './NumberPad.vue'
 import OwlSays from './OwlSays.vue'
+import StepComposer from './StepComposer.vue'
 import StepPlayer from './StepPlayer.vue'
 import WorkSheet from './WorkSheet.vue'
 import WorkTokens from './WorkTokens.vue'
 import { buildPuzzle, generateLevel } from '../core/generator.js'
 import { starsFor } from '../core/lessons.js'
+import { currentLines, foundList, nextStepHint, planStep, practiceSolved, problemSheet, startPractice } from '../core/practice.js'
 import { randomSeed } from '../core/random.js'
 import { buildWorking } from '../core/working.js'
-import { t } from '../i18n.js'
+import { t, template } from '../i18n.js'
 import { play } from '../sound.js'
 import { recordLesson } from '../store.js'
 import { makeWords } from '../words.js'
@@ -25,7 +27,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['home', 'again', 'next'])
 
-const STEP_PAUSE = 1500 // 一步填对以后，停一会儿看天平怎么变，再写下一步
+const STEP_PAUSE = 1500 // 一步算对以后，停一会儿看天平怎么变，再列下一步
 
 const theme = props.lesson.theme
 const { items: exItems, values: exValues, clues: exClues } = props.lesson.example
@@ -37,115 +39,237 @@ const problems = generateLevel(props.lesson, randomSeed())
 const phase = ref('teach')
 const index = ref(0)
 const problem = computed(() => problems[index.value])
-const work = computed(() => buildWorking(problem.value, props.lesson.tools))
 const words = computed(() => makeWords(problem.value.items, theme))
+const sheet = computed(() => problemSheet(problem.value))
 
-// —— 这道题做到哪儿了 ——
-const stepIndex = ref(0)
-const values = reactive({}) // 这一步已经填对的空
-const wrong = reactive({}) // 这一步填错的空（红色，点一下重新填）
-const padBlank = ref(null)
-const finished = ref(false) // 这一步刚填对，正在看天平变
+// —— 孩子列的步骤 ——
+const states = ref([startPractice(problems[0])]) // 每写完一步，多一个“现在的样子”
+const history = ref([]) // 写完、算对的步骤
+const planned = ref(null) // 列好了、正在算结果的这一步
+const choice = reactive({ method: null, scale: null, other: null, item: null, number: null })
+const gap = ref('scale') // 两架天平的方法：点天平时放进哪个空
+const message = ref(null) // 列步骤那里的话：提示，或者为什么不能这样做
+const tip = ref(null) // 算结果那一步里的话
+const hintLevel = ref(0)
+const values = reactive({}) // 这一步已经填对的数
+const wrong = reactive({}) // 这一步填错的数（红色，点一下重新填）
+const pad = ref(null) // 数字键盘：{ kind: 'number' } 列步骤时写的数；{ kind: 'blank', id } 算结果
+const finished = ref(false)
 const solved = ref(false)
 const mistakes = ref(false)
 const helped = ref(false)
 const firstTry = ref(0)
-const tip = ref(null)
 const showExample = ref(false)
 const result = ref(null)
 const confetti = ref(null)
 let pause = 0
 
-const step = computed(() => work.value.steps[stepIndex.value] || null)
-const nextBlank = computed(() => step.value?.blanks.find((b) => values[b.id] !== b.value)?.id ?? null)
+const state = computed(() => states.value[states.value.length - 1])
+const work = computed(() => ({ ...sheet.value, steps: planned.value ? [...history.value, planned.value] : history.value }))
+const lines = computed(() => currentLines(state.value))
+const found = computed(() => foundList(state.value))
+const nextBlank = computed(() => planned.value?.blanks.find((b) => values[b.id] !== b.value)?.id ?? null)
+const padBlank = computed(() => (pad.value?.kind === 'blank' ? pad.value.id : null))
+const canUndo = computed(() => !solved.value && !finished.value && Boolean(planned.value || history.value.length))
+const doneText = computed(() => (!mistakes.value && !helped.value ? t('practice.rightFirst') : t('practice.right')))
 
 const bubble = computed(() => ({
   title: phase.value === 'teach' ? t('teach.banner') : t('practice.banner', { n: index.value + 1, total: problems.length }),
   text: t(`lesson.${props.lesson.id}.idea`),
 }))
 
-function say(key, mood = 'think') {
-  tip.value = { text: t(key), mood }
-}
-
 function clear(map) {
   for (const key of Object.keys(map)) delete map[key]
 }
 
-function startPractice() {
+function resetChoice() {
+  Object.assign(choice, { method: null, scale: null, other: null, item: null, number: null })
+  gap.value = 'scale'
+}
+
+function resetProblem() {
+  clearTimeout(pause)
+  states.value = [startPractice(problem.value)]
+  history.value = []
+  planned.value = null
+  resetChoice()
+  clear(values)
+  clear(wrong)
+  finished.value = false
+  solved.value = false
+  mistakes.value = false
+  helped.value = false
+  hintLevel.value = 0
+  tip.value = null
+  message.value = { text: t('compose.start'), mood: 'think' }
+}
+
+function goPractice() {
   phase.value = 'practice'
-  say('work.start')
+  resetProblem()
   window.scrollTo({ top: 0 })
 }
 
-// —— 填空 ——
-function pick(id) {
-  if (solved.value || finished.value || !step.value) return
-  const blank = step.value.blanks.find((b) => b.id === id)
+// 列步骤那里出了话（提示、为什么不能这样做），滚到看得见“写出来”的地方
+async function showMessage() {
+  await nextTick()
+  const el = document.querySelector('.composer .composer-actions') || document.querySelector('.composer .composer-message')
+  el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+}
+
+// —— 列步骤：选方法、点天平、写数 ——
+function chooseMethod(method) {
+  play('tap')
+  resetChoice()
+  choice.method = method
+  if (lines.value.length === 1) choice.scale = lines.value[0].scale.id
+  if (method === 'substitute' && found.value.length === 1) choice.item = found.value[0].item
+  message.value = null
+}
+
+function pickScale(id) {
+  play('tap')
+  if (choice.method === 'subtract' || choice.method === 'add') {
+    choice[gap.value] = id
+    gap.value = gap.value === 'scale' ? 'other' : 'scale'
+  } else {
+    choice.scale = id
+  }
+}
+
+function pickGap(name) {
+  gap.value = name
+}
+
+function pickItem(item) {
+  play('tap')
+  choice.item = item
+}
+
+function openNumber() {
+  play('tap')
+  pad.value = { kind: 'number' }
+}
+
+// 写出来：能这样做就写进演算纸，不能就说为什么
+function confirmStep() {
+  const res = planStep(state.value, choice)
+  if (!res.ok) {
+    mistakes.value = true
+    message.value = { text: words.value.reasonText(res.reason), mood: 'oops' }
+    play('wrong')
+    showMessage()
+    return
+  }
+  play('move')
+  planned.value = res.step
+  message.value = null
+  tip.value = { text: t('compose.compute'), mood: 'think' }
+}
+
+// —— 算结果：这一步里变了的数由孩子自己算 ——
+function pickBlank(id) {
+  if (solved.value || finished.value || !planned.value) return
+  const blank = planned.value.blanks.find((b) => b.id === id)
   if (!blank || values[id] === blank.value) return
   play('tap')
-  padBlank.value = id
+  pad.value = { kind: 'blank', id }
 }
 
 function enter(value) {
-  const blank = step.value?.blanks.find((b) => b.id === padBlank.value)
-  if (!blank || value == null) {
-    padBlank.value = null
+  const target = pad.value
+  pad.value = null
+  if (value == null || !target) return
+  if (target.kind === 'number') {
+    choice.number = value
     return
   }
+  const blank = planned.value?.blanks.find((b) => b.id === target.id)
+  if (!blank) return
   if (value !== blank.value) {
     wrong[blank.id] = value
     mistakes.value = true
-    padBlank.value = null
-    say('work.wrong', 'oops')
+    tip.value = { text: t('work.wrong'), mood: 'oops' }
     play('wrong')
     return
   }
   values[blank.id] = value
   delete wrong[blank.id]
-  const rest = step.value.blanks.find((b) => values[b.id] !== b.value)
+  const rest = planned.value.blanks.find((b) => values[b.id] !== b.value)
   if (rest) {
-    // 这一步还有空：键盘接着填下一个
-    padBlank.value = rest.id
+    // 这一步还有数要算：键盘接着填下一个
+    pad.value = { kind: 'blank', id: rest.id }
     play('tap')
     return
   }
-  padBlank.value = null
   finishStep()
 }
 
-// 这一步都填对了：打勾，天平跟着变，停一会儿再写下一步
+// 这一步算对了：打勾，天平跟着变，停一会儿再列下一步
 function finishStep() {
   finished.value = true
-  say('work.right', 'happy')
+  tip.value = practiceSolved(planned.value.next) ? null : { text: t('compose.stepRight'), mood: 'happy' }
   play('move')
   clearTimeout(pause)
-  pause = setTimeout(nextStep, STEP_PAUSE)
+  pause = setTimeout(commitStep, STEP_PAUSE)
 }
 
-function nextStep() {
+function commitStep() {
+  const done = planned.value
+  history.value = [...history.value, done]
+  states.value = [...states.value, done.next]
+  planned.value = null
   finished.value = false
-  stepIndex.value++
   clear(values)
   clear(wrong)
   tip.value = null
-  if (stepIndex.value < work.value.steps.length) return
-  solved.value = true
-  const first = !mistakes.value && !helped.value
-  if (first) firstTry.value++
-  play('solved')
-  confetti.value?.fire()
+  resetChoice()
+  hintLevel.value = 0
+  if (practiceSolved(done.next)) {
+    solved.value = true
+    message.value = null
+    if (!mistakes.value && !helped.value) firstTry.value++
+    play('solved')
+    confetti.value?.fire()
+    return
+  }
+  message.value = { text: t('compose.stepDone'), mood: 'happy' }
 }
 
-// —— 提示：只说这一个空怎么想（用过就不算“一次做对”） ——
+// —— 擦掉一步：正在算的这一步，或者上一步 ——
+function undo() {
+  if (!canUndo.value) return
+  play('tap')
+  if (planned.value) {
+    planned.value = null
+    clear(values)
+    clear(wrong)
+    tip.value = null
+  } else {
+    history.value = history.value.slice(0, -1)
+    states.value = states.value.slice(0, -1)
+    resetChoice()
+  }
+  message.value = null
+  hintLevel.value = 0
+}
+
+// —— 提示：列步骤时，第一次问下一步怎么想，第二次说用哪个方法；算结果时只说这个数怎么算 ——
 function hint() {
-  if (!step.value || finished.value) return
-  const id = Object.keys(wrong)[0] ?? nextBlank.value
-  const blank = step.value.blanks.find((b) => b.id === id)
-  if (!blank) return
+  if (solved.value || finished.value) return
   play('tap')
   helped.value = true
-  tip.value = { text: words.value.hintText(step.value, blank), mood: 'think' }
+  if (planned.value) {
+    const id = Object.keys(wrong)[0] ?? nextBlank.value
+    const blank = planned.value.blanks.find((b) => b.id === id)
+    if (blank) tip.value = { text: words.value.hintText(planned.value, blank), mood: 'think' }
+    return
+  }
+  const next = nextStepHint(state.value, props.lesson.methods)
+  if (!next) message.value = { text: t('next.stuck'), mood: 'think' }
+  else message.value = { text: hintLevel.value === 0 ? words.value.nextThink(next) : words.value.nextDo(next), mood: 'think' }
+  hintLevel.value = 1
+  showMessage()
 }
 
 function openExample() {
@@ -156,14 +280,7 @@ function openExample() {
 function nextProblem() {
   if (index.value < problems.length - 1) {
     index.value++
-    stepIndex.value = 0
-    clear(values)
-    clear(wrong)
-    finished.value = false
-    solved.value = false
-    mistakes.value = false
-    helped.value = false
-    say('work.start')
+    resetProblem()
     play('tap')
     window.scrollTo({ top: 0 })
     return
@@ -176,20 +293,22 @@ function nextProblem() {
 
 onBeforeUnmount(() => clearTimeout(pause))
 
-const doneText = computed(() => (!mistakes.value && !helped.value ? t('practice.rightFirst') : t('practice.right')))
-
-// 键盘上方显示正在填的那一行
+// 键盘上方显示正在写的那一步
+function padSentence(typed) {
+  return template(`compose.${choice.method}`)
+    .replace('{scale}', choice.scale ?? '?')
+    .replace('{other}', choice.other ?? '?')
+    .replace('{number}', typed === '' ? '?' : typed)
+}
 const padLine = computed(() => {
-  if (!padBlank.value || !step.value) return null
-  if (step.value.titleNumber?.blank === padBlank.value) {
-    return { label: words.value.titleText(step.value), tokens: [step.value.titleNumber] }
-  }
-  for (const line of step.value.lines) {
+  const step = planned.value
+  if (!padBlank.value || !step) return null
+  for (const line of step.lines) {
     if (line.kind === 'eq' && line.tokens.some((tok) => tok.blank === padBlank.value)) return { tag: line.tag, tokens: line.tokens }
     if (line.kind === 'column') {
       const r = line.result
       if (r.right.blank === padBlank.value || Object.values(r.countBlanks).includes(padBlank.value)) {
-        const terms = work.value.items
+        const terms = problem.value.items
           .filter((item) => r.counts[item])
           .map((item) => ({ type: 'item', item, count: r.counts[item], blank: r.countBlanks[item] }))
         const tokens = terms.flatMap((tok, k) => (k > 0 ? [{ type: 'op', text: '+' }, tok] : [tok]))
@@ -228,10 +347,10 @@ const eyebrow = computed(() =>
       :tools="lesson.tools"
       :theme="theme"
       :finish-label="t('teach.startPractice')"
-      @finish="startPractice"
+      @finish="goPractice"
     />
 
-    <!-- 练习：照着例题一步一步演算 -->
+    <!-- 练习：孩子自己列步骤 -->
     <template v-else>
       <WorkSheet
         :key="`w${index}`"
@@ -240,21 +359,44 @@ const eyebrow = computed(() =>
         :theme="theme"
         :title="t('work.titleMine')"
         mode="do"
-        :upto="stepIndex"
+        :upto="history.length"
         :done="solved"
         :values="values"
         :wrong="wrong"
         :active="padBlank"
-        :next="padBlank || finished ? null : nextBlank"
+        :next="pad || finished ? null : nextBlank"
         :tip="tip"
         :finished="finished"
         :done-text="doneText"
-        @pick="pick"
-      />
+        @pick="pickBlank"
+      >
+        <template #composer>
+          <StepComposer
+            v-if="!planned && !solved"
+            :step-no="history.length + 1"
+            :methods="lesson.methods"
+            :lines="lines"
+            :found="found"
+            :choice="choice"
+            :active-gap="gap"
+            :items="problem.items"
+            :theme="theme"
+            :words="words"
+            :message="message"
+            @method="chooseMethod"
+            @scale="pickScale"
+            @gap="pickGap"
+            @item="pickItem"
+            @number="openNumber"
+            @confirm="confirmStep"
+          />
+        </template>
+      </WorkSheet>
 
       <footer class="action-bar">
         <template v-if="!solved">
           <button type="button" class="btn btn-soft" @click="hint">💡 {{ t('practice.hint') }}</button>
+          <button type="button" class="btn btn-soft" :disabled="!canUndo" @click="undo">↶ {{ t('practice.undo') }}</button>
           <button type="button" class="btn btn-soft" @click="openExample">📖 {{ t('practice.example') }}</button>
         </template>
         <button v-else type="button" class="btn btn-primary" @click="nextProblem">
@@ -263,17 +405,19 @@ const eyebrow = computed(() =>
       </footer>
     </template>
 
-    <NumberPad v-if="padBlank && padLine" :key="`${stepIndex}-${padBlank}`" :label="t('work.title')" @done="enter" @close="padBlank = null">
+    <NumberPad v-if="pad" :key="pad.kind === 'blank' ? `b-${pad.id}` : 'number'" :label="t('work.title')" @done="enter" @close="pad = null">
       <template #display="{ text }">
         <span class="pad-line">
-          <span v-if="padLine.label" class="pad-label">{{ padLine.label }}</span>
-          <span v-else class="pad-tag">{{ padLine.tag }}</span>
-          <WorkTokens :tokens="padLine.tokens" mode="do" :values="values" :active="padBlank" :typing="text" />
+          <template v-if="pad.kind === 'number'">{{ padSentence(text) }}</template>
+          <template v-else-if="padLine">
+            <span class="pad-tag">{{ padLine.tag }}</span>
+            <WorkTokens :tokens="padLine.tokens" mode="do" :values="values" :active="padBlank" :typing="text" />
+          </template>
         </span>
       </template>
     </NumberPad>
 
-    <!-- 看例题：老师写好的完整演算，照着做 -->
+    <!-- 看例题：老师写好的完整演算，照着想 -->
     <div v-if="showExample" class="example-backdrop" @click.self="showExample = false">
       <div class="example-sheet" role="dialog" aria-modal="true" :aria-label="t('practice.example')">
         <WorkSheet
@@ -342,10 +486,6 @@ const eyebrow = computed(() =>
   justify-content: center;
   gap: 6px 10px;
   font-size: 1.5rem;
-}
-.pad-label {
-  font-size: 1.2rem;
-  color: var(--teal);
 }
 .pad-tag {
   padding: 2px 8px;

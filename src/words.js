@@ -1,4 +1,5 @@
-// 把天平和演算写成孩子能读懂的话：每一步的标题和道理、天平上飘的字、每个空的提示、答案和检查。
+// 把天平和演算写成孩子能读懂的话：每一步的标题和道理、天平上飘的字、每个空的提示、
+// 孩子列的步骤为什么不能这样做、下一步的提示、答案和检查。
 // 写法：一种东西说“3 个 🍎”；几种东西说“🍎 和 2 个 🍌”；括号里的一组写成算式（🍎 + 2🍌）。
 import { itemLabel } from './items.js'
 import { hasKey, lang, t } from './i18n.js'
@@ -127,30 +128,108 @@ export function makeWords(items, theme) {
   function hintText(step, blank) {
     const info = step.info
     switch (blank.role) {
-      case 'shareN': {
-        const kinds = items.filter((item) => info.counts[item])
-        return kinds.length === 1
-          ? t('work.hint.shareN', { id: info.id, item: itemLabel(kinds[0]) })
-          : t('work.hint.shareNGroup', { id: info.id, group: groupOf(info.group) })
-      }
+      case 'shareCount':
+        return t('work.hint.shareCount', { from: blank.from, n: blank.n, item: itemLabel(blank.item) })
+      case 'subCount':
+        return t('work.hint.subCount', { a: blank.a, b: blank.b, item: itemLabel(blank.item) })
+      case 'addCount':
+        return t('work.hint.addCount', { a: blank.a, b: blank.b, item: itemLabel(blank.item) })
       case 'divide':
         return t('work.hint.divide', { total: info.total, n: info.n })
-      case 'takeAmount':
-        return t('work.hint.takeAmount', { id: info.id, items: itemsWords(info.counts) })
       case 'minus':
         return t('work.hint.minus', { total: info.total, amount: info.amount })
       case 'diff':
         return t('work.hint.diff', { big: info.big, small: info.small })
       case 'swapValue':
         return t('work.hint.swapValue', { item: itemLabel(info.item) })
-      case 'bundleValue':
-        return t('work.hint.bundleValue', { group: groupOf(info.group), src: info.src })
-      case 'count':
-        return t('work.hint.count', { a: info.a, b: info.b, item: itemLabel(blank.item) })
       default:
         return t('work.hint.sum', { ra: info.ra, rb: info.rb })
     }
   }
 
-  return { groupOf, itemsWords, extraWords, tt, goalText, answersText, checkLine, titleText, whyText, floatText, hintText }
+  const methodName = (method) => t(`method.${method}`)
+  const namesOf = (list) => list.map(itemLabel).join(isZh() ? ' 和 ' : ' and ')
+  const blocksText = (blocks) => blocks.map(money).join(' + ')
+
+  // 孩子列的这一步为什么不能这样做（只说原因，不替孩子选）
+  function reasonText(reason) {
+    const r = reason
+    switch (r.code) {
+      case 'shareBlocks':
+        return t('no.shareBlocks', { id: r.id, blocks: blocksText(r.blocks) })
+      case 'shareN':
+        return t('no.shareN', { id: r.id, left: groupOf(r.counts), n: r.n })
+      case 'takeNone':
+        return t('no.takeNone', { id: r.id, items: itemsWords(r.counts) })
+      case 'takeAmount':
+        return t('no.takeAmount', { id: r.id, blocks: blocksText(r.blocks), items: itemsWords(r.counts) })
+      case 'subSelf':
+        return t('no.subSelf', { id: r.id, item: itemLabel(r.item), value: money(r.value) })
+      case 'subTarget':
+      case 'subEmpty':
+        return t(`no.${r.code}`, { id: r.id, item: itemLabel(r.item) })
+      case 'columnBlocks':
+        return t('no.columnBlocks', { id: r.id })
+      case 'subtractMore':
+        return t('no.subtractMore', { dst: r.dst, src: r.src, item: itemLabel(r.item) })
+      case 'subtractSame':
+        return t('no.subtractSame', { dst: r.dst, src: r.src })
+      default:
+        return t(`no.${r.code}`)
+    }
+  }
+
+  // 下一步的提示，第一次：怎么想（不说用哪个方法）
+  function nextThink(hint) {
+    const info = hint.info
+    switch (hint.method) {
+      case 'takeAway':
+        return t('next.think.takeAway', { id: info.id, items: itemsWords(info.counts), blocks: blocksText(info.blocks) })
+      case 'share': {
+        const kinds = items.filter((item) => info.counts[item])
+        return kinds.length === 1
+          ? tt('next.think.shareOne', { id: info.id, n: info.n, item: itemLabel(kinds[0]), total: money(info.total) })
+          : tt('next.think.shareGroup', { id: info.id, n: info.n, group: groupOf(info.group), total: money(info.total) })
+      }
+      case 'substitute':
+        return t('next.think.substitute', { item: itemLabel(info.item), value: money(info.value), dst: info.dst })
+      case 'subtract':
+        return t('next.think.subtract', { dst: info.dst, src: info.src, common: groupOf(info.common) })
+      default:
+        return t('next.think.add', { a: info.a, b: info.b, moreA: namesOf(info.moreA), moreB: namesOf(info.moreB) })
+    }
+  }
+
+  // 下一步的提示，第二次：用哪个方法、哪架天平
+  function nextDo(hint) {
+    switch (hint.method) {
+      case 'takeAway':
+      case 'share':
+        return t(`next.do.${hint.method}`, { id: hint.scale, n: hint.number })
+      case 'substitute':
+        return t('next.do.substitute', { item: itemLabel(hint.item), value: money(hint.info.value), dst: hint.scale })
+      case 'subtract':
+        return t('next.do.subtract', { dst: hint.scale, src: hint.other })
+      default:
+        return t('next.do.add', { a: hint.scale, b: hint.other })
+    }
+  }
+
+  return {
+    groupOf,
+    itemsWords,
+    extraWords,
+    tt,
+    goalText,
+    answersText,
+    checkLine,
+    titleText,
+    whyText,
+    floatText,
+    hintText,
+    methodName,
+    reasonText,
+    nextThink,
+    nextDo,
+  }
 }

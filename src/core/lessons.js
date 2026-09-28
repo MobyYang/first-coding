@@ -1,9 +1,14 @@
 // 7 节课，从一个未知数学到二元一次方程组。每节课：先讲一道例题，再练 5 道题。
 // 标题、要点等文字在 i18n.js 里（按课的 id）。
 // template：练习题用哪种出题模板；tools：讲解时可以用哪些方法；needs：这一课的讲解一定会用到的方法；
+// methods：练习时孩子自己列步骤，可以选哪些方法（只放学过的）；
 // example：讲解用的例题（items 是东西，values 是答案，clues 是每架天平左盘的个数和砝码）
 const ALL = ['share', 'takeAway', 'swap', 'combine']
 const NO_COMBINE = ['share', 'takeAway', 'swap']
+const ONE_UNKNOWN = ['share', 'takeAway']
+const SUBSTITUTE = [...ONE_UNKNOWN, 'substitute']
+const SUBTRACT = [...SUBSTITUTE, 'subtract']
+const EVERY_METHOD = [...SUBTRACT, 'add']
 
 export const LESSONS = [
   {
@@ -11,6 +16,7 @@ export const LESSONS = [
     template: 'single-share',
     theme: 'fruit',
     tools: ['share'],
+    methods: ['share'],
     example: { items: ['apple'], values: [4], clues: [{ counts: [3] }] },
   },
   {
@@ -18,6 +24,7 @@ export const LESSONS = [
     template: 'single-mixed',
     theme: 'fruit',
     tools: ['share', 'takeAway'],
+    methods: ONE_UNKNOWN,
     needs: ['takeAway'],
     example: { items: ['apple'], values: [4], clues: [{ counts: [2], blocks: [3] }] },
   },
@@ -26,6 +33,7 @@ export const LESSONS = [
     template: 'pair-known',
     theme: 'fruit',
     tools: NO_COMBINE,
+    methods: SUBSTITUTE,
     needs: ['swap'],
     example: { items: ['apple', 'banana'], values: [5, 3], clues: [{ counts: [2, 0] }, { counts: [1, 1] }] },
   },
@@ -34,6 +42,7 @@ export const LESSONS = [
     template: 'bundle',
     theme: 'fruit',
     tools: NO_COMBINE,
+    methods: SUBTRACT,
     needs: ['swap'],
     example: { items: ['apple', 'banana'], values: [4, 6], clues: [{ counts: [1, 1] }, { counts: [2, 1] }] },
   },
@@ -42,6 +51,7 @@ export const LESSONS = [
     template: 'combine',
     theme: 'fruit',
     tools: ALL,
+    methods: EVERY_METHOD,
     needs: ['combine'],
     example: { items: ['apple', 'banana'], values: [4, 5], clues: [{ counts: [2, 1] }, { counts: [1, 2] }] },
   },
@@ -50,6 +60,7 @@ export const LESSONS = [
     template: 'mixed',
     theme: 'letters',
     tools: ALL,
+    methods: EVERY_METHOD,
     example: { items: ['x', 'y'], values: [4, 6], clues: [{ counts: [1, 1] }, { counts: [2, 1] }] },
   },
   {
@@ -57,6 +68,7 @@ export const LESSONS = [
     template: 'mixed-easy',
     theme: 'shop',
     tools: NO_COMBINE,
+    methods: SUBTRACT,
     example: { items: ['icecream', 'juice'], values: [5, 3], clues: [{ counts: [1, 1] }, { counts: [2, 1] }] },
   },
 ].map((lesson) => ({ count: 5, ...lesson }))
