@@ -1,8 +1,8 @@
-// 学习进度：只存在这台设备的浏览器里（localStorage），读写失败也不影响游戏
+// 学习记录：只存在这台设备的浏览器里（localStorage），读写失败也不影响使用
 import { reactive, watch } from 'vue'
-import { LEVELS, levelIndex } from './core/levels.js'
+import { LESSONS } from './core/lessons.js'
 
-const KEY = 'equation-detective:v1'
+const KEY = 'balance-equations:v1'
 
 function load() {
   try {
@@ -14,15 +14,15 @@ function load() {
 
 const saved = load()
 
-// 默认中文；只有自己点过切换、选了英文，才显示英文
+// 默认中文；只有自己选了英文，才显示英文
 function initialLang(settings = {}) {
   return settings.langChosen && settings.lang === 'en' ? 'en' : 'zh'
 }
 
 export const progress = reactive({
-  // 每关最好的星星数，例如 { '1-1': { stars: 3 } }
-  levels: saved.levels || {},
-  settings: { sound: true, unlockAll: false, ...(saved.settings || {}), lang: initialLang(saved.settings) },
+  // 每课最好成绩，例如 { '1': { stars: 3, best: 5 } }
+  lessons: saved.lessons || {},
+  settings: { sound: true, ...(saved.settings || {}), lang: initialLang(saved.settings) },
 })
 
 watch(
@@ -43,29 +43,19 @@ export function setLang(lang) {
 }
 
 export function starsOf(id) {
-  return progress.levels[id]?.stars || 0
+  return progress.lessons[id]?.stars || 0
 }
 
-export function isUnlocked(id) {
-  const index = levelIndex(id)
-  return progress.settings.unlockAll || index === 0 || starsOf(LEVELS[index - 1].id) > 0
+export function recordLesson(id, stars, best) {
+  const before = progress.lessons[id] || { stars: 0, best: 0 }
+  progress.lessons[id] = { stars: Math.max(before.stars, stars), best: Math.max(before.best, best) }
 }
 
-export function totalStars() {
-  return LEVELS.reduce((sum, level) => sum + starsOf(level.id), 0)
-}
-
-// 记录成绩，返回这次是不是第一次拿到贴纸、是不是第一次拿到金边
-export function recordLevel(id, stars) {
-  const before = starsOf(id)
-  if (stars > before) progress.levels[id] = { stars }
-  return { firstSticker: before === 0, firstGold: stars === 3 && before < 3 }
-}
-
-export function nextLevelToPlay() {
-  return LEVELS.find((level) => isUnlocked(level.id) && starsOf(level.id) === 0) || null
+// 下一课：第一节还没学过的课
+export function nextLesson() {
+  return LESSONS.find((lesson) => starsOf(lesson.id) === 0) || null
 }
 
 export function resetProgress() {
-  progress.levels = {}
+  progress.lessons = {}
 }

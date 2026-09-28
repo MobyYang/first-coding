@@ -1,75 +1,60 @@
 <script setup>
 import { computed, ref, watchEffect } from 'vue'
-import CageLevel from './components/CageLevel.vue'
-import MapView from './components/MapView.vue'
-import ScalesLevel from './components/ScalesLevel.vue'
+import HomeView from './components/HomeView.vue'
+import LessonView from './components/LessonView.vue'
 import SettingsView from './components/SettingsView.vue'
-import StickerBook from './components/StickerBook.vue'
-import { LEVELS, findLevel, levelIndex } from './core/levels.js'
+import { LESSONS, findLesson } from './core/lessons.js'
 import { unlockAudio } from './sound.js'
 import { progress } from './store.js'
 
-const screen = ref('map')
-const levelId = ref(null)
+const screen = ref('home')
+const lessonId = ref(null)
 const playKey = ref(0)
 
-const level = computed(() => findLevel(levelId.value))
-const nextLevel = computed(() => (levelId.value ? LEVELS[levelIndex(levelId.value) + 1] || null : null))
+const lesson = computed(() => findLesson(lessonId.value))
+const nextLesson = computed(() => {
+  const i = LESSONS.findIndex((l) => l.id === lessonId.value)
+  return i >= 0 ? LESSONS[i + 1] || null : null
+})
 
 watchEffect(() => {
   document.documentElement.lang = progress.settings.lang === 'zh' ? 'zh-CN' : 'en'
 })
 
-function top() {
+function go(name) {
+  screen.value = name
   window.scrollTo({ top: 0 })
 }
 
-function go(name) {
-  screen.value = name
-  top()
-}
-
-function openLevel(id) {
-  levelId.value = id
+function openLesson(id) {
+  lessonId.value = id
   playKey.value++
-  go('level')
+  go('lesson')
 }
 
-function playAgain() {
+function again() {
   playKey.value++
-  top()
+  window.scrollTo({ top: 0 })
 }
 
-function playNext() {
-  if (nextLevel.value) openLevel(nextLevel.value.id)
-  else go('map')
+function next() {
+  if (nextLesson.value) openLesson(nextLesson.value.id)
+  else go('home')
 }
 </script>
 
 <template>
   <main class="app" @pointerdown.capture="unlockAudio">
-    <MapView v-if="screen === 'map'" @play="openLevel" @stickers="go('stickers')" @settings="go('settings')" />
-    <template v-else-if="screen === 'level' && level">
-      <CageLevel
-        v-if="level.kind === 'cage'"
-        :key="playKey"
-        :level="level"
-        :has-next="Boolean(nextLevel)"
-        @exit="go('map')"
-        @again="playAgain"
-        @next="playNext"
-      />
-      <ScalesLevel
-        v-else
-        :key="playKey"
-        :level="level"
-        :has-next="Boolean(nextLevel)"
-        @exit="go('map')"
-        @again="playAgain"
-        @next="playNext"
-      />
-    </template>
-    <StickerBook v-else-if="screen === 'stickers'" @back="go('map')" />
-    <SettingsView v-else-if="screen === 'settings'" @back="go('map')" />
+    <HomeView v-if="screen === 'home'" @open="openLesson" @settings="go('settings')" />
+    <LessonView
+      v-else-if="screen === 'lesson' && lesson"
+      :key="playKey"
+      :lesson="lesson"
+      :has-next="Boolean(nextLesson)"
+      @home="go('home')"
+      @again="again"
+      @next="next"
+    />
+    <SettingsView v-else-if="screen === 'settings'" @back="go('home')" />
   </main>
 </template>

@@ -13,7 +13,7 @@ const props = defineProps({
 const parts = computed(() => equationParts(props.scale, props.items))
 
 function money(value) {
-  return props.theme === 'shop' ? t('level.yuan', { v: value }) : value
+  return props.theme === 'shop' ? t('unit.yuan', { v: value }) : value
 }
 </script>
 

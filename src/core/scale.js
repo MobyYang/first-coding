@@ -1,13 +1,13 @@
-// 天平模型。每架天平都是一条“线索”，也就是一个方程：
+// 天平模型。每架平衡的天平就是一个方程：
 //   左盘：若干个未知的东西（counts）+ 已知重量的砝码（blocks）
 //   右盘：一个写着数字的砝码（right）
 // 例：{ id: 'A', counts: { apple: 2, banana: 1 }, blocks: [], right: 13 } 表示 2🍎 + 🍌 = 13
 //
-// 所有“侦探道具”都是等式的变形，变形后天平仍然平衡：
-//   分一分（share）    两边同时平均分        ↔ 等式两边同除以一个数
-//   拿走（takeAway）   两边同时拿走同样重的   ↔ 等式两边同减一个数
-//   换一换（swap）     用一样重的东西替换     ↔ 代入消元
-//   合一合（combine）  两架天平合成一架       ↔ 两个方程相加（加减消元）
+// 讲解里的每一步都是等式的变形，变形后天平仍然平衡：
+//   平均分（share）        两边同时平均分        ↔ 等式两边同除以一个数
+//   两边同时拿走（takeAway） 两边同时拿走同样重的   ↔ 等式两边同减一个数
+//   代入（swap）           用一样重的东西替换     ↔ 代入消元
+//   两式相加（combine）     两架天平合成一架       ↔ 两个方程相加（加减消元）
 
 export const MAX_SCALES = 4
 const IDS = ['A', 'B', 'C', 'D', 'E', 'F']
@@ -49,7 +49,7 @@ function replaceScale(board, id, change) {
   return { ...board, scales: board.scales.map((s) => (s.id === id ? change(s) : s)) }
 }
 
-// 左盘只剩一个东西、没有砝码：这个东西有多重就“破案”了
+// 左盘只剩一个东西、没有砝码：这个东西有多重就求出来了
 export function discovered(scale) {
   const kinds = itemKinds(scale)
   if (scale.blocks.length === 0 && kinds.length === 1 && scale.counts[kinds[0]] === 1) {
@@ -72,7 +72,7 @@ export function isSolved(board) {
   return board.items.every((item) => item in found)
 }
 
-// 分一分：左盘的东西能平均分成几份（大于 1 才有用），不能分就返回 0
+// 平均分：左盘的东西能平均分成几份（大于 1 才有用），不能分就返回 0
 export function shareFactor(scale) {
   if (scale.blocks.length > 0) return 0
   const counts = Object.values(scale.counts)
@@ -81,7 +81,7 @@ export function shareFactor(scale) {
   return g > 1 && scale.right % g === 0 ? g : 0
 }
 
-// 换一换：target 的左盘里能找出几整套 source 左盘的东西。
+// 代入：target 的左盘里能找出几整套 source 左盘的东西。
 // 换完 target 必须还剩下东西，否则这一步没有意义，返回 0。
 export function swapTimes(source, target) {
   if (!source || !target || source.id === target.id || source.blocks.length > 0) return 0
@@ -170,7 +170,7 @@ export function clueRank(items, scales) {
   return rank
 }
 
-// 收起一架“合一合”变出来的天平：原来的线索不能收，收了会丢线索的也不能收
+// 收起一架合起来的天平：原来的天平不能收，收了会少一个有用方程的也不能收
 export function canRemove(board, id) {
   const scale = getScale(board, id)
   if (!scale || !scale.combined) return false
@@ -201,7 +201,7 @@ export function applyMove(board, move) {
 }
 
 // 用道具时，右盘要做的那道算术题。道具只负责摆天平，这道题留给孩子自己算。
-// 换一换和收起不需要算，返回 null。
+// 代入和收起不需要算，返回 null。
 export function moveArithmetic(board, move) {
   if (move.type === 'share') {
     const scale = getScale(board, move.scaleId)

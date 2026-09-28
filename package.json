@@ -1,8 +1,8 @@
 {
-  "name": "equation-detective",
+  "name": "balance-equations",
   "private": true,
   "version": "0.1.0",
-  "description": "方程小侦探：用天平和水果谜题学二元一次方程组的小游戏",
+  "description": "天平学方程：用天平一步一步学会二元一次方程组",
   "type": "module",
   "scripts": {
     "dev": "vite",

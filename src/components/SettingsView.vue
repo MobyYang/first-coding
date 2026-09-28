@@ -14,8 +14,8 @@ function setLang(lang) {
   play('tap')
 }
 
-function toggle(key) {
-  progress.settings[key] = !progress.settings[key]
+function toggleSound() {
+  progress.settings.sound = !progress.settings.sound
   play('tap')
 }
 
@@ -30,11 +30,13 @@ function onReset() {
   cleared.value = true
 }
 
-const TOOLS = [
-  { icon: '✂️', name: 'tool.share', method: 'parents.share' },
-  { icon: '✋', name: 'tool.takeAway', method: 'parents.takeAway' },
-  { icon: '🔄', name: 'tool.swap', method: 'parents.swap' },
-  { icon: '➕', name: 'tool.combine', method: 'parents.combine' },
+// 每课的方法对应课本里的哪种方法
+const METHODS = [
+  { lessons: '1', method: 'parents.share' },
+  { lessons: '2', method: 'parents.takeAway' },
+  { lessons: '3', method: 'parents.swap' },
+  { lessons: '4', method: 'parents.subtract' },
+  { lessons: '5', method: 'parents.add' },
 ]
 </script>
 
@@ -55,17 +57,8 @@ const TOOLS = [
       </div>
       <div class="setting">
         <span class="setting-name">{{ t('settings.sound') }}</span>
-        <button type="button" class="switch" :class="{ on: progress.settings.sound }" role="switch" :aria-checked="progress.settings.sound" @click="toggle('sound')">
+        <button type="button" class="switch" :class="{ on: progress.settings.sound }" role="switch" :aria-checked="progress.settings.sound" @click="toggleSound">
           {{ progress.settings.sound ? `🔊 ${t('settings.on')}` : `🔇 ${t('settings.off')}` }}
-        </button>
-      </div>
-      <div class="setting">
-        <span class="setting-name">
-          {{ t('settings.unlock') }}
-          <small>{{ t('settings.unlockDesc') }}</small>
-        </span>
-        <button type="button" class="switch" :class="{ on: progress.settings.unlockAll }" role="switch" :aria-checked="progress.settings.unlockAll" @click="toggle('unlockAll')">
-          {{ progress.settings.unlockAll ? `🔓 ${t('settings.on')}` : `🔒 ${t('settings.off')}` }}
         </button>
       </div>
       <div class="setting">
@@ -81,15 +74,14 @@ const TOOLS = [
       <h2>👪 {{ t('parents.title') }}</h2>
       <p>{{ t('parents.p1') }}</p>
       <p>{{ t('parents.p2') }}</p>
-      <ul class="tool-map">
-        <li v-for="tool in TOOLS" :key="tool.name">
-          <span class="tool-name">{{ tool.icon }} {{ t(tool.name, { v: '' }).trim() }}</span>
-          <span class="tool-arrow" aria-hidden="true">→</span>
-          <span>{{ t(tool.method) }}</span>
+      <ul class="method-map">
+        <li v-for="row in METHODS" :key="row.lessons">
+          <span class="method-lesson">{{ t('home.lesson', { n: row.lessons }) }} · {{ t(`lesson.${row.lessons}.title`) }}</span>
+          <span class="method-arrow" aria-hidden="true">→</span>
+          <span>{{ t(row.method) }}</span>
         </li>
       </ul>
       <p>{{ t('parents.p3') }}</p>
-      <p>{{ t('parents.p4') }}</p>
     </section>
   </div>
 </template>
@@ -113,14 +105,8 @@ const TOOLS = [
   border-bottom: 2px solid var(--paper-line);
 }
 .setting-name {
-  display: grid;
   font-weight: 600;
   font-size: 1.05rem;
-}
-.setting-name small {
-  font-weight: 500;
-  font-size: 0.85rem;
-  color: var(--ink-soft);
 }
 .segmented {
   display: inline-flex;
@@ -167,27 +153,36 @@ const TOOLS = [
   line-height: 1.6;
   max-width: 65ch;
 }
-.tool-map {
+.method-map {
   list-style: none;
   margin: 4px 0;
   padding: 0;
   display: grid;
   gap: 8px;
 }
-.tool-map li {
+.method-map li {
   display: grid;
-  grid-template-columns: minmax(7.5em, auto) auto 1fr;
+  grid-template-columns: minmax(9em, auto) auto 1fr;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
   border-radius: 12px;
   background: var(--teal-soft);
 }
-.tool-name {
+.method-lesson {
   font-weight: 700;
   color: #0d5f68;
 }
-.tool-arrow {
+.method-arrow {
   color: var(--ink-soft);
+}
+@media (max-width: 460px) {
+  .method-map li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .method-arrow {
+    display: none;
+  }
 }
 </style>

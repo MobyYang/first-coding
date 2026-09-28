@@ -77,7 +77,7 @@ export const TEMPLATES = {
     ])
     return { values: distinctInts(rng, 2, 2, 8), clues: rng.shuffle(pair.map((counts) => ({ counts }))) }
   },
-  // 2🍎 + 🍌 = 13，🍎 + 2🍌 = 14：谁也不包含谁，要先合一合
+  // 2🍎 + 🍌 = 13，🍎 + 2🍌 = 14：谁也不包含谁，要先两式相加
   combine(rng) {
     const pair = rng.pick([
       [[2, 1], [1, 2]],
@@ -89,6 +89,7 @@ export const TEMPLATES = {
 }
 
 const MIXES = {
+  'single-mixed': ['single-take', 'single-two-step'],
   'mixed-easy': ['pair-known', 'pair-known-plus', 'bundle'],
   mixed: ['pair-known-plus', 'bundle', 'bundle-multi', 'combine'],
 }

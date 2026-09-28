@@ -149,14 +149,7 @@ button {
   }
 }
 
-/* —— 关卡页 —— */
-.level {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 12px;
-  min-height: 100vh;
-  min-height: 100dvh;
-}
+/* —— 课程页 —— */
 .topbar {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
@@ -198,7 +191,7 @@ button {
   max-width: 860px;
 }
 
-/* —— 贴纸本、设置 —— */
+/* —— 设置页 —— */
 .page {
   display: grid;
   gap: 14px;

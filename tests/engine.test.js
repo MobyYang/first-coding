@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { applyCage, cageHint, cageSolved, generateCageLevel } from '../src/core/cage.js'
-import { MAX_RIGHT, generateLevel } from '../src/core/generator.js'
-import { LEVELS } from '../src/core/levels.js'
+import { checkWithAnswer, explainPuzzle } from '../src/core/explain.js'
+import { MAX_RIGHT, buildPuzzle, generateLevel } from '../src/core/generator.js'
+import { LESSONS } from '../src/core/lessons.js'
 import {
   applyCombine,
   applyMove,
@@ -9,7 +9,6 @@ import {
   applyShare,
   applySwap,
   applyTakeAway,
-  canCombine,
   canRemove,
   discoveredValues,
   isSolved,
@@ -21,7 +20,6 @@ import {
   weighAll,
 } from '../src/core/scale.js'
 import { planSolution } from '../src/core/solver.js'
-import { makeRng } from '../src/core/random.js'
 
 // 行列式不为 0 ⇔ 方程组只有一组解
 function determinant(matrix) {
@@ -149,8 +147,8 @@ describe('solver', () => {
 })
 
 describe('puzzle generator', () => {
-  for (const level of LEVELS.filter((l) => l.kind === 'scales')) {
-    it(`level ${level.id}: one whole-number answer, solvable with the level's tools`, () => {
+  for (const level of LESSONS) {
+    it(`lesson ${level.id}: one whole-number answer, solvable with the lesson's methods`, () => {
       for (let seed = 1; seed <= 150; seed++) {
         const puzzles = generateLevel(level, seed)
         expect(puzzles).toHaveLength(level.count)
@@ -180,59 +178,52 @@ describe('puzzle generator', () => {
   }
 })
 
-describe('hints after free play', () => {
-  function legalMoves(board, tools) {
-    const moves = []
-    for (const s of board.scales) {
-      if (tools.includes('share') && applyShare(board, s.id)) moves.push({ type: 'share', scaleId: s.id })
-      if (tools.includes('takeAway')) s.blocks.forEach((_, index) => moves.push({ type: 'takeAway', scaleId: s.id, index }))
-      if (canRemove(board, s.id)) moves.push({ type: 'remove', scaleId: s.id })
-      for (const t of board.scales) {
-        if (tools.includes('swap') && applySwap(board, s.id, t.id)) moves.push({ type: 'swap', sourceId: s.id, targetId: t.id })
-        if (tools.includes('combine') && s.id < t.id && canCombine(board, s.id, t.id)) {
-          moves.push({ type: 'combine', aId: s.id, bId: t.id })
-        }
+// 讲解要一步一步把答案算出来，每一步的算式都要对
+function expectExplained(puzzle, lesson) {
+  const steps = explainPuzzle(puzzle, lesson.tools)
+  expect(steps).not.toBeNull()
+  expect(steps.length).toBeGreaterThan(0)
+  expect(steps.length).toBeLessThanOrEqual(8)
+  for (const step of steps) {
+    if (step.kind === 'share') expect(step.result * step.n).toBe(step.total)
+    if (step.kind === 'takeAway') expect(step.total - step.amount).toBe(step.result)
+    if (step.kind === 'compare') expect(step.big - step.small).toBe(step.result)
+    if (step.kind === 'combine') expect(step.ra + step.rb).toBe(step.result)
+  }
+  const last = steps[steps.length - 1].board
+  expect(isSolved(last)).toBe(true)
+  expect(discoveredValues(last)).toEqual(puzzle.answer)
+  expect(checkWithAnswer(puzzle.board, puzzle.answer).every((row) => row.ok)).toBe(true)
+  const kinds = steps.map((step) => step.kind)
+  if (lesson.needs?.includes('swap')) expect(kinds.some((k) => ['swapKnown', 'swapBundle', 'compare'].includes(k))).toBe(true)
+  if (lesson.needs?.includes('combine')) expect(kinds).toContain('combine')
+  if (lesson.needs?.includes('takeAway')) expect(kinds.some((k) => k === 'takeAway' || k === 'compare')).toBe(true)
+  return steps
+}
+
+describe('explanations', () => {
+  for (const lesson of LESSONS) {
+    it(`lesson ${lesson.id}: the worked example and every practice problem are explained step by step`, () => {
+      const { items, values, clues } = lesson.example
+      const example = buildPuzzle(lesson.template, values, clues, items)
+      expectExplained(example, lesson)
+      for (let seed = 1; seed <= 100; seed++) {
+        for (const puzzle of generateLevel(lesson, seed)) expectExplained(puzzle, lesson)
       }
-    }
-    return moves
+    })
   }
 
-  it('can still find a way to the answer after random tool presses', () => {
-    for (const level of LEVELS.filter((l) => l.kind === 'scales')) {
-      for (let seed = 1; seed <= 40; seed++) {
-        const rng = makeRng(seed * 31)
-        for (const puzzle of generateLevel(level, seed)) {
-          let board = puzzle.board
-          for (let step = 0; step < 8 && !isSolved(board); step++) {
-            board = applyMove(board, rng.pick(legalMoves(board, level.tools)))
-            expect(planSolution(board, level.tools)).not.toBeNull()
-          }
-        }
-      }
-    }
+  it('explains “compare the scales” as one step', () => {
+    const lesson = LESSONS.find((l) => l.id === '4')
+    const { items, values, clues } = lesson.example
+    const steps = explainPuzzle(buildPuzzle(lesson.template, values, clues, items), lesson.tools)
+    expect(steps[0]).toMatchObject({ kind: 'compare', src: 'A', dst: 'B', extra: { apple: 1 }, big: 14, small: 10, result: 4 })
   })
-})
 
-describe('chickens and rabbits', () => {
-  const level = LEVELS.find((l) => l.kind === 'cage')
-
-  it('always has a whole-number answer that the hints lead to', () => {
-    for (let seed = 1; seed <= 200; seed++) {
-      const puzzles = generateCageLevel(level, seed)
-      expect(puzzles).toHaveLength(level.count)
-      for (const puzzle of puzzles) {
-        const { chickens, rabbits } = puzzle.answer
-        expect(chickens).toBeGreaterThan(0)
-        expect(rabbits).toBeGreaterThan(0)
-        expect(chickens + rabbits).toBe(puzzle.heads)
-        expect(2 * chickens + 4 * rabbits).toBe(puzzle.legs)
-
-        let state = { chickens: 0, rabbits: 0 }
-        for (let step = 0; step < 40 && !cageSolved(puzzle, state); step++) {
-          state = applyCage(state, cageHint(puzzle, state).action)
-        }
-        expect(state).toEqual(puzzle.answer)
-      }
-    }
+  it('puts several weights taken off the same scale into one step', () => {
+    const board = makeBoard(['apple', 'banana'], [makeScale('A', { apple: 1, banana: 1 }, 9), makeScale('B', { apple: 3, banana: 2 }, 22)])
+    const steps = explainPuzzle({ board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
+    expect(steps[0]).toMatchObject({ kind: 'swapBundle', times: 2 })
+    expect(steps[1]).toMatchObject({ kind: 'takeAway', taken: [9, 9], amount: 18, total: 22, result: 4 })
   })
 })

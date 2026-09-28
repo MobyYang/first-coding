@@ -1,18 +1,18 @@
 <script setup>
-// 关卡结算：星星一颗颗亮起来，送一张贴纸
+// 一课学完：星星一颗颗亮起来，显示第一次就答对了几题
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import OwlSays from './OwlSays.vue'
 import { t } from '../i18n.js'
 import { play } from '../sound.js'
 
 const props = defineProps({
-  level: { type: Object, required: true },
+  lesson: { type: Object, required: true },
   stars: { type: Number, required: true },
-  firstSticker: { type: Boolean, default: false },
-  firstGold: { type: Boolean, default: false },
+  firstTry: { type: Number, required: true },
+  total: { type: Number, required: true },
   hasNext: { type: Boolean, default: false },
 })
-const emit = defineEmits(['again', 'next', 'map'])
+const emit = defineEmits(['again', 'next', 'home'])
 
 const lit = ref(0)
 const timers = []
@@ -33,22 +33,18 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
 
 <template>
   <div class="result-backdrop">
-    <section class="result" role="dialog" aria-modal="true" :aria-label="t('done.level')">
-      <p class="result-eyebrow">{{ level.id }} · {{ t(`level.${level.id}`) }}</p>
-      <h2 class="result-title">{{ t('done.level') }}</h2>
+    <section class="result" role="dialog" aria-modal="true" :aria-label="t('result.title')">
+      <p class="result-eyebrow">{{ t('home.lesson', { n: lesson.id }) }} · {{ t(`lesson.${lesson.id}.title`) }}</p>
+      <h2 class="result-title">{{ t('result.title') }}</h2>
       <div class="result-stars" :aria-label="`${stars} / 3`">
         <span v-for="i in 3" :key="i" class="result-star" :class="{ on: i <= lit }">★</span>
       </div>
-      <div class="result-sticker" :class="{ gold: stars === 3 }">
-        <span class="sticker-emoji">{{ level.sticker }}</span>
-      </div>
-      <p v-if="firstGold" class="result-note">{{ t('done.gold') }}</p>
-      <p v-else-if="firstSticker" class="result-note">{{ t('done.sticker') }}</p>
-      <OwlSays v-if="!hasNext" :text="t('done.allDone')" mood="happy" :size="56" />
+      <p class="result-score">{{ t('result.score', { n: firstTry, total }) }}</p>
+      <OwlSays v-if="!hasNext" :text="t('result.allDone')" mood="happy" :size="56" />
       <div class="result-actions">
-        <button type="button" class="btn btn-soft" @click="emit('again')">↺ {{ t('done.again') }}</button>
-        <button type="button" class="btn btn-soft" @click="emit('map')">🗺️ {{ t('done.map') }}</button>
-        <button v-if="hasNext" type="button" class="btn btn-primary" @click="emit('next')">{{ t('done.nextLevel') }} ▶</button>
+        <button type="button" class="btn btn-soft" @click="emit('again')">↺ {{ t('result.again') }}</button>
+        <button type="button" class="btn btn-soft" @click="emit('home')">{{ t('result.home') }}</button>
+        <button v-if="hasNext" type="button" class="btn btn-primary" @click="emit('next')">{{ t('result.next') }} ▶</button>
       </div>
     </section>
   </div>
@@ -88,7 +84,6 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
 .result-title {
   margin: 0;
   font-size: 2rem;
-  text-wrap: balance;
 }
 .result-stars {
   display: flex;
@@ -105,29 +100,10 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
   transform: scale(1.15) rotate(-8deg);
   text-shadow: 0 3px 0 #d99a0b;
 }
-.result-sticker {
-  display: grid;
-  place-items: center;
-  width: 108px;
-  height: 108px;
-  border-radius: 50%;
-  background: #fff;
-  border: 6px solid var(--teal-soft);
-  box-shadow: 0 4px 0 var(--paper-line);
-  animation: wiggle 1.2s ease-in-out 0.9s 2;
-}
-.result-sticker.gold {
-  border-color: var(--sun);
-  box-shadow: 0 0 0 4px #fff3c4, 0 4px 0 #d99a0b;
-}
-.sticker-emoji {
-  font-family: var(--emoji);
-  font-size: 3.6rem;
-}
-.result-note {
+.result-score {
   margin: 0;
+  font-size: 1.15rem;
   font-weight: 600;
-  color: var(--coral-dark);
 }
 .result-actions {
   display: flex;
@@ -145,14 +121,6 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
 @keyframes fade {
   from {
     opacity: 0;
-  }
-}
-@keyframes wiggle {
-  25% {
-    transform: rotate(-8deg);
-  }
-  75% {
-    transform: rotate(8deg);
   }
 }
 </style>

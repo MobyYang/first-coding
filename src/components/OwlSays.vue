@@ -1,5 +1,5 @@
 <script setup>
-// 咕咕探长：会眨眼的猫头鹰侦探 + 说话气泡。mood: happy / think / wow / oops
+// 猫头鹰老师：会眨眼、戴眼镜的猫头鹰 + 说话气泡。mood: happy / think / wow / oops
 defineProps({
   text: { type: String, default: '' },
   mood: { type: String, default: 'think' },
@@ -12,6 +12,8 @@ defineProps({
     <svg class="owl" :class="`mood-${mood}`" :width="size" :height="size" viewBox="0 0 100 100" aria-hidden="true">
       <g class="owl-body">
         <ellipse cx="50" cy="94" rx="26" ry="4" fill="rgba(29,47,79,0.14)" />
+        <path d="M24 34 L 27 14 L 39 29 Z" fill="#7b4d2c" />
+        <path d="M76 34 L 73 14 L 61 29 Z" fill="#7b4d2c" />
         <path d="M18 60 Q 10 80 26 90 Q 22 74 26 60 Z" fill="#7b4d2c" />
         <path d="M82 60 Q 90 80 74 90 Q 78 74 74 60 Z" fill="#7b4d2c" />
         <ellipse cx="50" cy="60" rx="33" ry="33" fill="#9c6639" />
@@ -33,18 +35,13 @@ defineProps({
             <circle cx="64" cy="46.5" r="1.8" fill="#fff" />
           </g>
         </g>
+        <g class="glasses" fill="none" stroke="#1d2f4f" stroke-width="2.5">
+          <circle cx="37" cy="48" r="11.5" />
+          <circle cx="63" cy="48" r="11.5" />
+          <path d="M48.5 47 Q 50 45 51.5 47" />
+        </g>
         <path d="M46 57 L54 57 L50 64 Z" fill="#ff9f1c" />
         <path v-if="mood === 'oops'" d="M79 36 q4 6 0 9 q-4 -3 0 -9 z" fill="#8fd3f4" />
-        <!-- 侦探帽 -->
-        <path d="M23 34 C 26 12, 74 12, 77 34 Z" fill="#3e6d8e" />
-        <path d="M18 34 L 82 34 Q 85 39 80 40 L 20 40 Q 15 39 18 34 Z" fill="#2c5471" />
-        <circle cx="50" cy="16" r="3.5" fill="#2c5471" />
-        <path d="M30 29 Q 50 22 70 29" stroke="#f2c14e" stroke-width="3" fill="none" stroke-linecap="round" />
-        <!-- 放大镜 -->
-        <g transform="translate(83 70) rotate(35)">
-          <rect x="-2.5" y="8" width="5" height="14" rx="2.5" fill="#a8720c" />
-          <circle r="10" fill="rgba(201,236,250,0.75)" stroke="#e3a526" stroke-width="3.5" />
-        </g>
         <path d="M40 92 l-4 4 M44 92 v5 M58 92 l4 4 M56 92 v5" stroke="#ff9f1c" stroke-width="3" stroke-linecap="round" />
       </g>
     </svg>

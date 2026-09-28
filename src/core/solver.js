@@ -1,5 +1,5 @@
-// 小侦探的“解题思路”：按优先级找下一步好棋。
-// 提示功能和出题器都用它：出题器用它确认每道题都能用本关的道具解开。
+// 解题思路：按优先级找下一步。
+// 讲解、提示和出题器都用它：出题器用它确认每道题都能用本课的方法解出来。
 import {
   MAX_SCALES,
   applyMove,
@@ -34,7 +34,7 @@ export function nextMove(board, tools) {
     if (scale) return { type: 'takeAway', scaleId: scale.id, index: 0 }
   }
 
-  // 2. 能平均分就分（优先分完直接破案的）
+  // 2. 能平均分就分（优先分完就能求出答案的）
   if (has('share')) {
     const candidates = scales.filter((s) => shareFactor(s) > 0)
     if (candidates.length > 0) {
@@ -43,7 +43,7 @@ export function nextMove(board, tools) {
     }
   }
 
-  // 3. 换一换：先用已经破案的东西，再用“最大的一套”去换
+  // 3. 代入：先用已经求出来的东西，再用“最大的一套”去换
   if (has('swap')) {
     let best = null
     for (const source of scales) {
@@ -87,7 +87,7 @@ export function nextMove(board, tools) {
   return null
 }
 
-// 从当前局面一路按思路走到破案，走不通返回 null
+// 从当前的天平一路按思路走到求出全部答案，走不通返回 null
 export function planSolution(board, tools, maxSteps = 24) {
   let current = board
   const moves = []
