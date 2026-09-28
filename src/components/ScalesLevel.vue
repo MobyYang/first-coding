@@ -27,7 +27,7 @@ import {
 } from '../core/scale.js'
 import { planSolution } from '../core/solver.js'
 import { ITEMS, itemLabel } from '../items.js'
-import { lang, t } from '../i18n.js'
+import { hasKey, lang, t } from '../i18n.js'
 import { play } from '../sound.js'
 import { recordLevel } from '../store.js'
 
@@ -102,31 +102,115 @@ function sameSubject(a, b) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-function thinkText(move) {
-  if (move.type === 'share') return t('think.share', { id: move.scaleId })
-  if (move.type === 'takeAway') return t('think.takeAway', { id: move.scaleId })
-  if (move.type === 'swap') {
-    return discovered(getScale(board.value, move.sourceId))
-      ? t('think.swapKnown')
-      : t('think.swapBundle', { src: move.sourceId, dst: move.targetId })
+// —— 提示里用到的文字：用天平上真实的东西和数字，但从不出现答案 ——
+function groupOf(counts) {
+  return items.value
+    .filter((item) => counts[item])
+    .map((item) => (counts[item] > 1 ? `${counts[item]}${itemLabel(item)}` : itemLabel(item)))
+    .join(' + ')
+}
+
+function scaled(counts, factor) {
+  return Object.fromEntries(Object.entries(counts).map(([item, n]) => [item, n * factor]))
+}
+
+function minus(counts, taken, times) {
+  const out = { ...counts }
+  for (const [item, n] of Object.entries(taken)) {
+    out[item] = (out[item] || 0) - n * times
+    if (out[item] <= 0) delete out[item]
   }
-  if (move.type === 'combine') return t('think.combine', { a: move.aId, b: move.bId })
+  return out
+}
+
+// 说话时的写法：“3 个 🍇”“🍐 和 2 个 🍎”；括号里的一组东西才写成算式（🍐 + 2🍎）
+function itemsWords(counts) {
+  const zh = lang() === 'zh'
+  return items.value
+    .filter((item) => counts[item])
+    .map((item) => {
+      const n = counts[item]
+      if (n === 1) return itemLabel(item)
+      return zh ? `${n} 个 ${itemLabel(item)}` : `${n} ${itemLabel(item)}`
+    })
+    .join(zh ? ' 和 ' : ' and ')
+}
+
+function listOf(values) {
+  const shown = theme === 'shop' ? values.map((v) => t('level.yuan', { v })) : values
+  return shown.join(lang() === 'zh' ? ' 和 ' : ' and ')
+}
+
+// 小卖部的未知数是价钱，有专门的说法就用专门的
+function themed(key) {
+  return theme === 'shop' && hasKey(`${key}.shop`) ? `${key}.shop` : key
+}
+function tt(key, params = {}) {
+  return t(themed(key), params)
+}
+
+// 分一分：只有一种东西（4🍎 = 36）和几份一样的组合（2🍎 + 2🍌 = 18）说法不同
+function shareWords(scale) {
+  const g = shareFactor(scale)
+  const kinds = Object.keys(scale.counts)
+  if (kinds.length === 1) return { key: 'One', params: { id: scale.id, n: g, item: itemLabel(kinds[0]), total: scale.right } }
+  return { key: 'Group', params: { id: scale.id, g, group: groupOf(scaled(scale.counts, 1 / g)), total: scale.right } }
+}
+
+function thinkText(move) {
+  const b = board.value
+  if (move.type === 'share') {
+    const { key, params } = shareWords(getScale(b, move.scaleId))
+    return tt(`think.share${key}`, params)
+  }
+  if (move.type === 'takeAway') {
+    const s = getScale(b, move.scaleId)
+    const params = { id: s.id, items: itemsWords(s.counts), v: s.blocks[move.index ?? 0], blocks: listOf(s.blocks), total: s.right }
+    return tt(s.blocks.length > 1 ? 'think.takeAwayMany' : 'think.takeAway', params)
+  }
+  if (move.type === 'swap') {
+    const src = getScale(b, move.sourceId)
+    const dst = getScale(b, move.targetId)
+    const k = swapTimes(src, dst)
+    const rest = itemsWords(minus(dst.counts, src.counts, k))
+    const d = discovered(src)
+    if (d) return tt('think.swapKnown', { src: src.id, dst: dst.id, item: itemLabel(d.item), rest })
+    if (k === 1 && dst.blocks.length === 0) return tt('think.swapCompare', { src: src.id, dst: dst.id, extra: rest })
+    return tt('think.swapBundle', { src: src.id, dst: dst.id, k, group: groupOf(src.counts), w: src.right, rest })
+  }
+  if (move.type === 'combine') {
+    const a = getScale(b, move.aId)
+    const c = getScale(b, move.bId)
+    const sum = scaled(a.counts, 1)
+    for (const [item, n] of Object.entries(c.counts)) sum[item] = (sum[item] || 0) + n
+    const g = Object.values(sum).reduce((x, y) => {
+      while (y) [x, y] = [y, x % y]
+      return x
+    })
+    return tt('think.combine', { a: a.id, b: c.id, group: groupOf(scaled(sum, 1 / g)) })
+  }
   return t('think.remove')
 }
 
 function toolText(move) {
   const b = board.value
   const p = pending.value
-  if (move.type === 'share') return t('hint.share', { id: move.scaleId, n: shareFactor(getScale(b, move.scaleId)) })
+  if (move.type === 'share') {
+    const { key, params } = shareWords(getScale(b, move.scaleId))
+    return tt(`hint.share${key}`, params)
+  }
   if (move.type === 'takeAway') {
     const s = getScale(b, move.scaleId)
-    return t('hint.takeAway', { id: s.id, v: s.blocks[move.index ?? 0] })
+    const params = { id: s.id, v: s.blocks[move.index ?? 0], items: itemsWords(s.counts) }
+    return tt(s.blocks.length > 1 ? 'hint.takeAwayMore' : 'hint.takeAway', params)
   }
   if (move.type === 'swap') {
     if (p?.type === 'swap' && p.id === move.sourceId) return t('hint.swapTarget', { dst: move.targetId })
-    return discovered(getScale(b, move.sourceId))
-      ? t('hint.swapKnown', { src: move.sourceId, dst: move.targetId })
-      : t('hint.swapBundle', { src: move.sourceId, dst: move.targetId })
+    const src = getScale(b, move.sourceId)
+    const d = discovered(src)
+    return d
+      ? tt('hint.swapKnown', { src: src.id, dst: move.targetId, item: itemLabel(d.item) })
+      : tt('hint.swapBundle', { src: src.id, dst: move.targetId, group: groupOf(src.counts), w: src.right })
   }
   if (move.type === 'combine') {
     return p?.type === 'combine' && p.id === move.aId
@@ -140,7 +224,7 @@ function hintText(h) {
   const { subject, level } = h
   if (subject.type === 'stuck') return t('hint.stuck')
   if (subject.type === 'weigh') return t(level === 1 ? 'think.weigh' : 'hint.weigh')
-  if (subject.type === 'record') return t(level === 1 ? 'think.record' : 'hint.record')
+  if (subject.type === 'record') return level === 1 ? tt('think.record') : t('hint.record')
   return level === 1 ? thinkText(subject.move) : toolText(subject.move)
 }
 
@@ -229,7 +313,7 @@ function commit(move) {
   const newItem = next.items.find((item) => nowFound[item] !== undefined && beforeFound[item] === undefined)
   if (newItem !== undefined) {
     const scale = next.scales.find((s) => discovered(s)?.item === newItem)
-    say('msg.found', { id: scale.id, item: itemLabel(newItem) }, 'wow')
+    say(themed('msg.found'), { id: scale.id, item: itemLabel(newItem) }, 'wow')
     play('found')
   } else {
     const e = event.value
@@ -267,14 +351,19 @@ const calcView = computed(() => {
   let heading
   let explain
   if (move.type === 'share') {
+    const words = shareWords(getScale(board.value, move.scaleId))
     heading = `✂️ ${t('tool.share')} · ${t('level.clue', { id: move.scaleId })}`
-    explain = t('calc.share', { n: a.b })
+    explain = tt(`calc.share${words.key}`, words.params)
   } else if (move.type === 'takeAway') {
+    const s = getScale(board.value, move.scaleId)
     heading = `✋ ${t('tool.takeAway', { v: a.b })} · ${t('level.clue', { id: move.scaleId })}`
-    explain = t('calc.takeAway', { v: a.b })
+    explain =
+      s.blocks.length > 1
+        ? tt('calc.takeAwayMany', { v: a.b, total: a.a })
+        : tt('calc.takeAway', { items: itemsWords(s.counts), v: a.b, total: a.a })
   } else {
     heading = `➕ ${t('tool.combine')} · ${move.aId} + ${move.bId}`
-    explain = t('calc.combine')
+    explain = tt('calc.combine')
   }
   return { heading, explain, expression: `${a.a} ${a.op} ${a.b}` }
 })
