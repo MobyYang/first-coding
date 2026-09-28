@@ -1,8 +1,7 @@
-// 把天平上的东西写成孩子能读懂的话。讲解、提示、检查都用它。
+// 把天平和演算写成孩子能读懂的话：演算里每一步“做什么”、每个空的提示、答案和检查。
 // 写法：一种东西说“3 个 🍎”；几种东西说“🍎 和 2 个 🍌”；括号里的一组写成算式（🍎 + 2🍌）。
 import { itemLabel } from './items.js'
 import { hasKey, lang, t } from './i18n.js'
-import { discovered, gcd, getScale, shareFactor, swapTimes } from './core/scale.js'
 
 export function makeWords(items, theme) {
   const isZh = () => lang() === 'zh'
@@ -35,26 +34,13 @@ export function makeWords(items, theme) {
     return itemsWords(counts)
   }
 
-  function listOf(values) {
-    return values.map(money).join(isZh() ? ' 和 ' : ' and ')
-  }
-
-  // 天平写成算式：2🍎 + 🍌 + 5 = 13
-  function eqText(scale) {
-    const left = [groupOf(scale.counts), ...scale.blocks.map(money)].filter(Boolean).join(' + ')
-    return `${left} = ${money(scale.right)}`
-  }
-
   function tt(key, params = {}) {
     return t(theme === 'shop' && hasKey(`${key}.shop`) ? `${key}.shop` : key, params)
   }
 
-  function namesOf(list) {
-    return list.map(itemLabel).join(isZh() ? ' 和 ' : ' and ')
-  }
-
-  function unknowns() {
-    return namesOf(items)
+  // 求：🍎 = ?，🍌 = ?
+  function goalText() {
+    return t('work.goal', { unknowns: items.map((item) => `${itemLabel(item)} = ?`).join(isZh() ? '，' : ', ') })
   }
 
   function answersText(answer) {
@@ -68,87 +54,57 @@ export function makeWords(items, theme) {
     return `${parts.join(' + ')} = ${row.left}${row.ok ? ' ✓' : ''}`
   }
 
-  // 提示：从要找的答案出发，问第一步该怎么想（不说答案）
-  function thinkText(board, move) {
-    if (move.type === 'share') {
-      const scale = getScale(board, move.scaleId)
-      const g = shareFactor(scale)
-      const kinds = Object.keys(scale.counts)
-      if (kinds.length === 1) return tt('think.shareOne', { id: scale.id, n: g, item: itemLabel(kinds[0]), total: scale.right })
-      const group = groupOf(Object.fromEntries(Object.entries(scale.counts).map(([k, n]) => [k, n / g])))
-      return tt('think.shareGroup', { id: scale.id, g, group, total: scale.right })
+  // 演算里的一步“做什么”：A：两边同时 ÷（后面接着那个数）、B 比 A 多 1 个 🍎……
+  function labelText(step) {
+    const info = step.info
+    switch (step.kind) {
+      case 'share':
+        return t('work.share', { id: info.id })
+      case 'takeAway':
+        return t('work.takeAway', { id: info.id })
+      case 'compare':
+        return t('work.compare', { dst: info.dst, src: info.src, extra: extraWords(info.extra) })
+      case 'swapKnown':
+        return t('work.swapKnown', { item: itemLabel(info.item), value: money(info.value), dst: info.dst })
+      case 'swapBundle':
+        return t('work.swapBundle', { dst: info.dst, times: info.times, group: groupOf(info.group) })
+      default:
+        return t('work.combine', { a: info.a, b: info.b })
     }
-    if (move.type === 'takeAway') {
-      const scale = getScale(board, move.scaleId)
-      const params = { id: scale.id, items: itemsWords(scale.counts), v: scale.blocks[move.index ?? 0], blocks: listOf(scale.blocks), total: scale.right }
-      return tt(scale.blocks.length > 1 ? 'think.takeAwayMany' : 'think.takeAway', params)
-    }
-    if (move.type === 'swap') {
-      const source = getScale(board, move.sourceId)
-      const target = getScale(board, move.targetId)
-      const times = swapTimes(source, target)
-      const rest = { ...target.counts }
-      for (const [item, n] of Object.entries(source.counts)) {
-        rest[item] -= n * times
-        if (rest[item] <= 0) delete rest[item]
-      }
-      const known = discovered(source)
-      if (known) return tt('think.swapKnown', { src: source.id, dst: target.id, item: itemLabel(known.item), rest: itemsWords(rest) })
-      if (times === 1 && target.blocks.length === 0) return tt('think.swapCompare', { src: source.id, dst: target.id, extra: extraWords(rest) })
-      return tt('think.swapBundle', { src: source.id, dst: target.id, k: times, group: groupOf(source.counts), w: source.right, rest: itemsWords(rest) })
-    }
-    if (move.type === 'combine') {
-      const a = getScale(board, move.aId)
-      const b = getScale(board, move.bId)
-      const sum = { ...a.counts }
-      for (const [item, n] of Object.entries(b.counts)) sum[item] = (sum[item] || 0) + n
-      const g = Object.values(sum).reduce(gcd)
-      const group = groupOf(Object.fromEntries(Object.entries(sum).map(([k, n]) => [k, n / g])))
-      // 先说为什么要合起来：一架这样东西多，另一架那样东西多，没法直接比一比
-      const moreA = items.filter((item) => (a.counts[item] || 0) > (b.counts[item] || 0))
-      const moreB = items.filter((item) => (b.counts[item] || 0) > (a.counts[item] || 0))
-      const why =
-        moreA.length && moreB.length
-          ? t('think.combineWhy', { a: a.id, b: b.id, moreA: namesOf(moreA), moreB: namesOf(moreB) })
-          : ''
-      return [why, tt('think.combine', { g, group })].filter(Boolean).join(isZh() ? '' : ' ')
-    }
-    return t('think.remove')
   }
 
-  // 讲解的一步：做了什么 + 算式 + 结果
-  function stepText(step) {
-    if (step.kind === 'share') {
-      const kinds = Object.keys(step.counts)
-      if (kinds.length === 1) {
-        return tt('step.shareOne', { id: step.scaleId, n: step.n, item: itemLabel(kinds[0]), total: step.total, result: step.result })
+  // 一个空怎么想：只给思路，不说这个空填几
+  function hintText(step, blank) {
+    const info = step.info
+    switch (blank.role) {
+      case 'shareN': {
+        const kinds = items.filter((item) => info.counts[item])
+        return kinds.length === 1
+          ? t('work.hint.shareN', { id: info.id, item: itemLabel(kinds[0]) })
+          : t('work.hint.shareNGroup', { id: info.id, group: groupOf(info.group) })
       }
-      return tt('step.shareGroup', { id: step.scaleId, g: step.n, group: groupOf(step.after.counts), total: step.total, result: step.result })
+      case 'divide':
+        return t('work.hint.divide', { total: info.total, n: info.n })
+      case 'takeAmount':
+        return t('work.hint.takeAmount', { id: info.id, items: itemsWords(info.counts) })
+      case 'minus':
+        return t('work.hint.minus', { total: info.total, amount: info.amount })
+      case 'big':
+        return t('work.hint.big', { dst: info.dst })
+      case 'small':
+        return t('work.hint.small', { src: info.src })
+      case 'diff':
+        return t('work.hint.diff', { big: info.big, small: info.small })
+      case 'swapValue':
+        return t('work.hint.swapValue', { item: itemLabel(info.item) })
+      case 'bundleValue':
+        return t('work.hint.bundleValue', { group: groupOf(info.group), src: info.src })
+      case 'count':
+        return t('work.hint.count', { a: info.a, b: info.b, item: itemLabel(blank.item) })
+      default:
+        return t('work.hint.sum', { ra: info.ra, rb: info.rb })
     }
-    if (step.kind === 'takeAway') {
-      const params = { id: step.scaleId, amount: step.amount, total: step.total, result: step.result, rest: itemsWords(step.after.counts) }
-      return step.found
-        ? tt('step.takeAwayFound', { ...params, item: itemLabel(step.found.item) })
-        : tt('step.takeAway', params)
-    }
-    if (step.kind === 'compare') {
-      const params = { src: step.src, dst: step.dst, big: step.big, small: step.small, result: step.result }
-      return step.found
-        ? tt('step.compareFound', { ...params, item: itemLabel(step.found.item) })
-        : tt('step.compare', { ...params, extra: itemsWords(step.extra) })
-    }
-    if (step.kind === 'swapKnown') {
-      const params = { item: itemLabel(step.item), value: step.value, dst: step.dst, times: step.times, eq: eqText(step.after) }
-      return tt(step.times > 1 ? 'step.swapKnownMany' : 'step.swapKnown', params)
-    }
-    if (step.kind === 'swapBundle') {
-      return tt('step.swapBundle', { dst: step.dst, times: step.times, group: groupOf(step.group), value: step.value, eq: eqText(step.after) })
-    }
-    if (step.kind === 'combine') {
-      return tt('step.combine', { a: step.a, b: step.b, ra: step.ra, rb: step.rb, result: step.result, newId: step.newId, eq: eqText(step.after) })
-    }
-    return t('step.remove', { id: step.scaleId })
   }
 
-  return { groupOf, itemsWords, eqText, tt, unknowns, answersText, checkLine, thinkText, stepText }
+  return { groupOf, itemsWords, extraWords, tt, goalText, answersText, checkLine, labelText, hintText }
 }

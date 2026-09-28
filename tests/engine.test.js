@@ -14,12 +14,12 @@ import {
   isSolved,
   makeBoard,
   makeScale,
-  moveArithmetic,
   shareFactor,
   swapTimes,
   weighAll,
 } from '../src/core/scale.js'
 import { planSolution } from '../src/core/solver.js'
+import { buildWorking, lineValues } from '../src/core/working.js'
 
 // 行列式不为 0 ⇔ 方程组只有一组解
 function determinant(matrix) {
@@ -104,20 +104,6 @@ describe('scale moves', () => {
     )
     expect(canRemove(board, 'C')).toBe(false)
     expect(applyRemove(board, 'C')).toBeNull()
-  })
-
-  it('leaves the arithmetic of each tool for the child', () => {
-    const shareBoard = makeBoard(['apple'], [makeScale('A', { apple: 5 }, 20)])
-    expect(moveArithmetic(shareBoard, { type: 'share', scaleId: 'A' })).toEqual({ op: '÷', a: 20, b: 5, result: 4 })
-    const takeBoard = makeBoard(['apple'], [makeScale('A', { apple: 1 }, 9, [5])])
-    expect(moveArithmetic(takeBoard, { type: 'takeAway', scaleId: 'A', index: 0 })).toEqual({ op: '−', a: 9, b: 5, result: 4 })
-    const pair = makeBoard(
-      ['apple', 'banana'],
-      [makeScale('A', { apple: 2, banana: 1 }, 13), makeScale('B', { apple: 1, banana: 2 }, 14)],
-    )
-    expect(moveArithmetic(pair, { type: 'combine', aId: 'A', bId: 'B' })).toEqual({ op: '+', a: 13, b: 14, result: 27 })
-    expect(moveArithmetic(pair, { type: 'swap', sourceId: 'A', targetId: 'B' })).toBeNull()
-    expect(moveArithmetic(pair, { type: 'share', scaleId: 'A' })).toBeNull()
   })
 
   it('weighs guesses on every scale', () => {
@@ -225,5 +211,92 @@ describe('explanations', () => {
     const steps = explainPuzzle({ board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
     expect(steps[0]).toMatchObject({ kind: 'swapBundle', times: 2 })
     expect(steps[1]).toMatchObject({ kind: 'takeAway', taken: [9, 9], amount: 18, total: 22, result: 4 })
+  })
+})
+
+// 演算：每一行算式代入答案都成立；每一步都有孩子要填的空；一步一步算出全部答案
+function expectWorking(puzzle, lesson) {
+  const work = buildWorking(puzzle, lesson.tools)
+  expect(work).not.toBeNull()
+  const holds = (tokens) => {
+    const values = lineValues(tokens, puzzle.answer)
+    expect(values.length).toBeGreaterThan(1)
+    for (const v of values) expect(v).toBe(values[0])
+  }
+  work.given.forEach((row) => holds(row.tokens))
+  const found = {}
+  for (const step of work.steps) {
+    holds(step.line)
+    const ids = new Set()
+    if (step.labelNumber?.blank) ids.add(step.labelNumber.blank)
+    for (const tok of step.line) if (tok.blank) ids.add(tok.blank)
+    expect(step.blanks.length).toBeGreaterThan(0)
+    expect(step.blanks.map((b) => b.id).sort()).toEqual([...ids].sort())
+    for (const blank of step.blanks) {
+      expect(Number.isInteger(blank.value)).toBe(true)
+      expect(blank.value).toBeGreaterThan(0)
+      expect(blank.value).toBeLessThan(100) // 数字键盘最多填两位数
+    }
+    for (const tok of step.line) if (tok.type === 'ref') expect(tok.value).toBe(step.labelNumber.value)
+    if (step.found) found[step.found.item] = step.found.value
+  }
+  expect(found).toEqual(puzzle.answer)
+  return work
+}
+
+const lineText = (tokens) =>
+  tokens
+    .map((tok) => {
+      if (tok.type === 'item') return tok.count > 1 ? `${tok.count}${tok.item}` : tok.item
+      return tok.type === 'op' ? tok.text : String(tok.value)
+    })
+    .join(' ')
+
+function exampleOf(id) {
+  const lesson = LESSONS.find((l) => l.id === id)
+  const { items, values, clues } = lesson.example
+  return { lesson, puzzle: buildPuzzle(lesson.template, values, clues, items) }
+}
+
+describe('working (演算)', () => {
+  for (const lesson of LESSONS) {
+    it(`lesson ${lesson.id}: every line of the working is true and the steps reach every answer`, () => {
+      const { puzzle } = exampleOf(lesson.id)
+      expectWorking(puzzle, lesson)
+      for (let seed = 1; seed <= 100; seed++) {
+        for (const problem of generateLevel(lesson, seed)) expectWorking(problem, lesson)
+      }
+    })
+  }
+
+  it('writes substitution in place and keeps every step on the page', () => {
+    const { lesson, puzzle } = exampleOf('3')
+    const work = buildWorking(puzzle, lesson.tools)
+    expect(work.given.map((row) => lineText(row.tokens))).toEqual(['2apple = 10', 'apple + banana = 8'])
+    expect(work.steps.map((step) => [step.scaleId, lineText(step.line)])).toEqual([
+      ['A', 'apple = 10 ÷ 2 = 5'],
+      ['B', '5 + banana = 8'],
+      ['B', 'banana = 8 − 5 = 3'],
+    ])
+    expect(work.steps.map((step) => step.blanks.map((b) => `${b.id}=${b.value}`))).toEqual([['n=2', 'r=5'], ['v=5'], ['a=5', 'r=3']])
+  })
+
+  it('adds two scales left to left and right to right', () => {
+    const { lesson, puzzle } = exampleOf('5')
+    const work = buildWorking(puzzle, lesson.tools)
+    expect(work.steps.map((step) => [step.scaleId, lineText(step.line)])).toEqual([
+      ['C', '3apple + 3banana = 13 + 14 = 27'],
+      ['C', 'apple + banana = 27 ÷ 3 = 9'],
+      ['A', 'apple = 13 − 9 = 4'],
+      ['C', '4 + banana = 9'],
+      ['C', 'banana = 9 − 4 = 5'],
+    ])
+    expect(work.steps[0].blanks.map((b) => b.id)).toEqual(['c-apple', 'c-banana', 'r'])
+  })
+
+  it('writes 2 × 4 when two of the same thing are replaced', () => {
+    const board = makeBoard(['apple', 'banana'], [makeScale('A', { apple: 3 }, 12), makeScale('B', { apple: 2, banana: 1 }, 13)])
+    const work = buildWorking({ items: ['apple', 'banana'], board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
+    expect(work.steps.map((step) => lineText(step.line))).toEqual(['apple = 12 ÷ 3 = 4', '2 × 4 + banana = 13', 'banana = 13 − 8 = 5'])
   })
 })

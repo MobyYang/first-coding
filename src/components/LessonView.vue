@@ -1,20 +1,21 @@
 <script setup>
-// 一节课：先看讲解（一道例题一步一步来），再做 5 道练习。
-// 练习只有一个问题：每样东西等于几？孩子直接填答案，点“检查”。
+// 一节课：先看老师把例题一步一步演算出来，再照着例题做 5 道练习。
+// 练习也是一步一步演算：先填这一步做什么（比如“两边同时 − ?”），再算出新算式里的数。
+// 一步填对了，天平才跟着变，再写下一步；最后一步算出来的就是答案。
 import { computed, reactive, ref } from 'vue'
-import BalanceScale from './BalanceScale.vue'
 import ConfettiBurst from './ConfettiBurst.vue'
-import EquationLine from './EquationLine.vue'
 import LessonResult from './LessonResult.vue'
 import NumberPad from './NumberPad.vue'
 import OwlSays from './OwlSays.vue'
+import ScaleBoard from './ScaleBoard.vue'
 import StepPlayer from './StepPlayer.vue'
+import WorkSheet from './WorkSheet.vue'
+import WorkTokens from './WorkTokens.vue'
 import { buildPuzzle, generateLevel } from '../core/generator.js'
 import { starsFor } from '../core/lessons.js'
 import { randomSeed } from '../core/random.js'
-import { planSolution } from '../core/solver.js'
-import { ITEMS, itemLabel } from '../items.js'
-import { lang, t } from '../i18n.js'
+import { buildWorking } from '../core/working.js'
+import { t } from '../i18n.js'
 import { play } from '../sound.js'
 import { recordLesson } from '../store.js'
 import { makeWords } from '../words.js'
@@ -28,121 +29,138 @@ const emit = defineEmits(['home', 'again', 'next'])
 const theme = props.lesson.theme
 const { items: exItems, values: exValues, clues: exClues } = props.lesson.example
 const example = buildPuzzle(props.lesson.template, exValues, exClues, exItems)
+const exampleWork = buildWorking(example, props.lesson.tools)
+const exampleWords = makeWords(example.items, theme)
 const problems = generateLevel(props.lesson, randomSeed())
 
 const phase = ref('teach')
 const index = ref(0)
 const problem = computed(() => problems[index.value])
+const work = computed(() => buildWorking(problem.value, props.lesson.tools))
 const words = computed(() => makeWords(problem.value.items, theme))
 
-const answers = reactive({})
-const marks = ref(null)
-const weighValues = ref(null)
+// —— 这道题做到哪儿了 ——
+const stepIndex = ref(0)
+const values = reactive({}) // 这一步已经填对的空
+const wrong = reactive({}) // 这一步填错的空（红色，点一下重新填）
+const board = ref(problems[0].board)
+const event = ref(null)
+const padBlank = ref(null)
 const solved = ref(false)
-const tried = ref(false)
+const mistakes = ref(false)
 const helped = ref(false)
-const hintLevel = ref(0)
-const showSteps = ref(false)
-const message = ref({ key: 'practice.ask', mood: 'think' })
-const padItem = ref(null)
 const firstTry = ref(0)
+const message = ref({ text: '', mood: 'think' })
+const showExample = ref(false)
 const result = ref(null)
 const confetti = ref(null)
 
-const bubble = computed(() => {
-  if (phase.value === 'teach') return { text: t(`lesson.${props.lesson.id}.idea`), mood: 'think' }
-  if (hintLevel.value === 1) {
-    const plan = planSolution(problem.value.board, props.lesson.tools)
-    return { text: plan?.length ? words.value.thinkText(problem.value.board, plan[0]) : t('hint.more'), mood: 'think' }
-  }
-  if (hintLevel.value === 2) return { text: t('hint.more'), mood: 'think' }
-  return { text: t(message.value.key), mood: message.value.mood }
-})
+const step = computed(() => work.value.steps[stepIndex.value] || null)
+const nextBlank = computed(() => step.value?.blanks.find((b) => values[b.id] !== b.value)?.id ?? null)
+const active = computed(() => event.value?.scaleIds || [])
+
+const bubble = computed(() =>
+  phase.value === 'teach' ? { text: t(`lesson.${props.lesson.id}.idea`), mood: 'think' } : message.value,
+)
 
 function say(key, mood = 'think') {
-  hintLevel.value = 0
-  message.value = { key, mood }
+  message.value = { text: t(key), mood }
+}
+
+function clear(map) {
+  for (const key of Object.keys(map)) delete map[key]
 }
 
 function startPractice() {
   phase.value = 'practice'
-  say('practice.ask')
+  say('work.start')
   window.scrollTo({ top: 0 })
 }
 
-// —— 填答案 ——
-function openPad(item) {
-  if (solved.value) return
+// —— 填空 ——
+function pick(id) {
+  if (solved.value || !step.value) return
+  const blank = step.value.blanks.find((b) => b.id === id)
+  if (!blank || values[id] === blank.value) return
   play('tap')
-  padItem.value = item
+  padBlank.value = id
 }
 
-function setAnswer(value) {
-  const item = padItem.value
-  padItem.value = null
-  if (value == null) delete answers[item]
-  else answers[item] = value
-  if (marks.value) {
-    marks.value = null
-    weighValues.value = null
-    say('practice.edit')
+function enter(value) {
+  const blank = step.value?.blanks.find((b) => b.id === padBlank.value)
+  if (!blank || value == null) {
+    padBlank.value = null
+    return
   }
-}
-
-function check() {
-  const items = problem.value.items
-  if (items.some((item) => answers[item] == null)) {
-    say('practice.fill')
+  if (value !== blank.value) {
+    wrong[blank.id] = value
+    mistakes.value = true
+    padBlank.value = null
+    say('work.wrong', 'oops')
     play('wrong')
     return
   }
-  const result = Object.fromEntries(items.map((item) => [item, answers[item] === problem.value.answer[item]]))
-  marks.value = result
-  weighValues.value = { ...answers }
-  if (items.every((item) => result[item])) {
-    const first = !tried.value && !helped.value
-    if (first) firstTry.value++
-    solved.value = true
-    say(first ? 'practice.rightFirst' : 'practice.right', 'happy')
-    play('solved')
-    confetti.value?.fire()
-  } else {
-    say('practice.wrong', 'oops')
-    play('wrong')
+  values[blank.id] = value
+  delete wrong[blank.id]
+  const rest = step.value.blanks.find((b) => values[b.id] !== b.value)
+  if (rest) {
+    // 这一步还有空：键盘接着填下一个
+    padBlank.value = rest.id
+    play('tap')
+    return
   }
-  tried.value = true
+  padBlank.value = null
+  finishStep()
 }
 
-// —— 提示和讲解（用过就不算“第一次答对”） ——
+function finishStep() {
+  const finished = step.value
+  board.value = finished.board
+  event.value = finished.event ? { ...finished.event, key: Date.now() } : null
+  stepIndex.value++
+  clear(values)
+  clear(wrong)
+  if (stepIndex.value < work.value.steps.length) {
+    say('work.right', 'happy')
+    play('move')
+    return
+  }
+  solved.value = true
+  const first = !mistakes.value && !helped.value
+  if (first) firstTry.value++
+  say(first ? 'practice.rightFirst' : 'practice.right', 'happy')
+  play('solved')
+  confetti.value?.fire()
+}
+
+// —— 提示：只说这一个空怎么想（用过就不算“一次做对”） ——
 function hint() {
+  if (!step.value) return
+  const id = Object.keys(wrong)[0] ?? nextBlank.value
+  const blank = step.value.blanks.find((b) => b.id === id)
+  if (!blank) return
   play('tap')
   helped.value = true
-  hintLevel.value = hintLevel.value === 0 ? 1 : 2
+  message.value = { text: words.value.hintText(step.value, blank), mood: 'think' }
 }
 
-function openSteps() {
+function openExample() {
   play('tap')
-  helped.value = true
-  say('practice.steps')
-  showSteps.value = true
-}
-
-function closeSteps() {
-  showSteps.value = false
-  say('practice.backNote')
+  showExample.value = true
 }
 
 function nextProblem() {
   if (index.value < problems.length - 1) {
     index.value++
-    for (const key of Object.keys(answers)) delete answers[key]
-    marks.value = null
-    weighValues.value = null
+    stepIndex.value = 0
+    clear(values)
+    clear(wrong)
+    board.value = problem.value.board
+    event.value = null
     solved.value = false
-    tried.value = false
+    mistakes.value = false
     helped.value = false
-    showSteps.value = false
-    say('practice.ask')
+    say('work.start')
     play('tap')
     window.scrollTo({ top: 0 })
     return
@@ -152,6 +170,15 @@ function nextProblem() {
   result.value = { stars, firstTry: firstTry.value }
   phase.value = 'done'
 }
+
+// 键盘上方显示正在填的那一行
+const padLine = computed(() => {
+  if (!padBlank.value || !step.value) return null
+  if (step.value.labelNumber?.blank === padBlank.value) {
+    return { label: words.value.labelText(step.value), tokens: [step.value.labelNumber] }
+  }
+  return { tag: step.value.scaleId, tokens: step.value.line }
+})
 
 const title = computed(() => `${t('home.lesson', { n: props.lesson.id })} · ${t(`lesson.${props.lesson.id}.title`)}`)
 const eyebrow = computed(() =>
@@ -174,7 +201,7 @@ const eyebrow = computed(() =>
 
     <OwlSays class="owl-row" :text="bubble.text" :mood="bubble.mood" />
 
-    <!-- 讲解 -->
+    <!-- 讲解：老师一步一步演算例题 -->
     <StepPlayer
       v-if="phase === 'teach'"
       :puzzle="example"
@@ -184,67 +211,58 @@ const eyebrow = computed(() =>
       @finish="startPractice"
     />
 
-    <!-- 练习 -->
-    <template v-else-if="phase === 'practice' || phase === 'done'">
-      <StepPlayer
-        v-if="showSteps"
-        :key="`steps-${index}`"
-        :puzzle="problem"
-        :tools="lesson.tools"
-        :theme="theme"
-        :finish-label="t('practice.back')"
-        @finish="closeSteps"
-      />
-      <template v-else>
-        <TransitionGroup tag="section" name="card" appear class="board" :class="`count-${problem.board.scales.length}`">
-          <article v-for="scale in problem.board.scales" :key="`${index}-${scale.id}`" class="scale-card">
-            <span class="scale-tag">{{ t('scale.name', { id: scale.id }) }}</span>
-            <BalanceScale :scale="scale" :items="problem.items" :theme="theme" :values="weighValues" />
-            <EquationLine :scale="scale" :items="problem.items" :theme="theme" />
-          </article>
-        </TransitionGroup>
+    <!-- 练习：孩子照着例题一步一步演算 -->
+    <template v-else>
+      <div class="study">
+        <ScaleBoard :board="board" :items="problem.items" :theme="theme" :event="event" :active="active" :key-prefix="`p${index}`" />
+        <WorkSheet
+          :key="`w${index}`"
+          :work="work"
+          :words="words"
+          mode="do"
+          :upto="stepIndex"
+          :done="solved"
+          :values="values"
+          :wrong="wrong"
+          :active="padBlank"
+          :next="padBlank ? null : nextBlank"
+          @pick="pick"
+        />
+      </div>
 
-        <footer class="answer-bar">
-          <div class="answers">
-            <span class="answers-title">{{ t('practice.answer') }}</span>
-            <button
-              v-for="item in problem.items"
-              :key="`${index}-${item}`"
-              type="button"
-              class="answer"
-              :class="{ empty: answers[item] == null, right: marks && marks[item], wrong: marks && !marks[item] }"
-              :disabled="solved"
-              :aria-label="`${ITEMS[item][lang()]} = ${answers[item] ?? '?'}`"
-              @click="openPad(item)"
-            >
-              <span class="answer-item" :class="{ letter: ITEMS[item].letter }" :style="ITEMS[item].letter ? { color: ITEMS[item].color } : null">{{ itemLabel(item) }}</span>
-              <span class="answer-eq">=</span>
-              <span class="answer-value">{{ answers[item] ?? '?' }}</span>
-              <span v-if="marks" class="answer-mark" aria-hidden="true">{{ marks[item] ? '✓' : '✗' }}</span>
-            </button>
-          </div>
-          <div class="answer-actions">
-            <template v-if="!solved">
-              <button type="button" class="btn btn-soft" @click="hint">💡 {{ t('practice.hint') }}</button>
-              <button type="button" class="btn btn-soft" @click="openSteps">📖 {{ t('practice.explain') }}</button>
-              <button type="button" class="btn btn-primary" @click="check">{{ t('practice.check') }}</button>
-            </template>
-            <button v-else type="button" class="btn btn-primary" @click="nextProblem">
-              {{ index < problems.length - 1 ? t('practice.next') : t('practice.finish') }} ▶
-            </button>
-          </div>
-        </footer>
-      </template>
+      <footer class="action-bar">
+        <template v-if="!solved">
+          <button type="button" class="btn btn-soft" @click="hint">💡 {{ t('practice.hint') }}</button>
+          <button type="button" class="btn btn-soft" @click="openExample">📖 {{ t('practice.example') }}</button>
+        </template>
+        <button v-else type="button" class="btn btn-primary" @click="nextProblem">
+          {{ index < problems.length - 1 ? t('practice.next') : t('practice.finish') }} ▶
+        </button>
+      </footer>
     </template>
 
-    <NumberPad
-      v-if="padItem"
-      :label="itemLabel(padItem)"
-      :letter="Boolean(ITEMS[padItem].letter)"
-      :initial="answers[padItem] ?? null"
-      @done="setAnswer"
-      @close="padItem = null"
-    />
+    <NumberPad v-if="padBlank && padLine" :key="`${stepIndex}-${padBlank}`" :label="t('work.title')" @done="enter" @close="padBlank = null">
+      <template #display="{ text }">
+        <span class="pad-line">
+          <span v-if="padLine.label" class="pad-label">{{ padLine.label }}</span>
+          <span v-else class="pad-tag">{{ padLine.tag }}</span>
+          <WorkTokens :tokens="padLine.tokens" mode="do" :values="values" :active="padBlank" :typing="text" />
+        </span>
+      </template>
+    </NumberPad>
+
+    <!-- 看例题：老师写好的完整演算，照着做 -->
+    <div v-if="showExample" class="example-backdrop" @click.self="showExample = false">
+      <div class="example-sheet" role="dialog" aria-modal="true" :aria-label="t('practice.example')">
+        <p class="example-title">📖 {{ t('practice.example') }}</p>
+        <WorkSheet :work="exampleWork" :words="exampleWords" :upto="exampleWork.steps.length" :done="true">
+          <div class="example-actions">
+            <button type="button" class="btn btn-primary" @click="showExample = false">{{ t('practice.back') }} ▶</button>
+          </div>
+        </WorkSheet>
+      </div>
+    </div>
+
     <LessonResult
       v-if="phase === 'done' && result"
       :lesson="lesson"
@@ -271,117 +289,72 @@ const eyebrow = computed(() =>
 .topbar-spacer {
   width: 44px;
 }
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 14px;
-  align-items: start;
-}
-.board.count-1 {
-  max-width: 460px;
-  width: 100%;
-  margin-inline: auto;
-}
-.scale-card {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px 12px;
-  border-radius: var(--radius);
-  background: var(--paper);
-  box-shadow: var(--shadow);
-}
-.scale-tag {
-  justify-self: start;
-  padding: 3px 12px;
-  border-radius: 10px;
-  background: var(--brass-light);
-  color: #6b4a06;
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-.answer-bar {
+.action-bar {
   position: sticky;
   bottom: 0;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
+  justify-content: flex-end;
+  gap: 10px;
   margin-inline: -16px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   background: rgba(255, 253, 246, 0.95);
   backdrop-filter: blur(6px);
   border-top: 3px solid var(--paper-line);
 }
-.answers {
+.pad-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 6px 10px;
+  font-size: 1.55rem;
 }
-.answers-title {
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-.answer {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 56px;
-  padding: 6px 16px;
-  border-radius: 16px;
-  border: 3px solid var(--teal);
-  background: #fff;
+.pad-label {
+  font-size: 1.2rem;
   color: var(--teal);
-  font: inherit;
-  font-size: 1.5rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
 }
-.answer.empty {
-  border-style: dashed;
-  color: var(--ink-soft);
+.pad-tag {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--brass-light);
+  color: #6b4a06;
+  font-size: 0.95rem;
 }
-.answer.right {
-  border-color: var(--leaf);
-  background: var(--leaf-soft);
-  color: var(--leaf);
+.example-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(29, 47, 79, 0.35);
+  animation: fade-in 0.15s ease-out;
 }
-.answer.wrong {
-  border-color: var(--berry);
-  background: var(--berry-soft);
-  color: var(--berry);
-}
-.answer:disabled {
-  cursor: default;
-}
-.answer-item {
-  font-family: var(--emoji);
-}
-.answer-item.letter {
-  font-family: var(--font);
-  font-style: italic;
-}
-.answer-eq {
-  color: var(--ink-soft);
-}
-.answer-mark {
-  font-size: 1.1rem;
-}
-.answer-actions {
-  display: flex;
-  flex-wrap: wrap;
+.example-sheet {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  display: grid;
   gap: 8px;
-  margin-left: auto;
 }
-.card-enter-active {
-  animation: card-pop 0.4s cubic-bezier(0.3, 1.4, 0.5, 1);
+.example-title {
+  margin: 0;
+  justify-self: start;
+  padding: 4px 14px;
+  border-radius: 12px;
+  background: var(--paper);
+  font-size: 1.2rem;
+  font-weight: 700;
 }
-@keyframes card-pop {
+.example-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+@keyframes fade-in {
   from {
-    transform: scale(0.85);
     opacity: 0;
   }
 }

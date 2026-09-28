@@ -1,5 +1,6 @@
 <script setup>
-// 屏幕数字键盘：填“🍎 = ?”的答案。平板上不弹系统键盘，不会挡住题目。
+// 屏幕数字键盘：填演算里的空。平板上不弹系统键盘，不会挡住题目。
+// 上面默认显示“🍎 = ?”；用 display 插槽可以换成正在填的那一行算式。
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { play } from '../sound.js'
 
@@ -48,9 +49,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div class="pad-backdrop" @click.self="emit('close')">
     <div class="pad" role="dialog" aria-modal="true" :aria-label="label">
       <div class="pad-display">
-        <span class="pad-item" :class="{ letter }">{{ label }}</span>
-        <span class="pad-eq">=</span>
-        <span class="pad-value" :class="{ empty: text === '' }">{{ text === '' ? '?' : text }}</span>
+        <slot name="display" :text="text">
+          <span class="pad-item" :class="{ letter }">{{ label }}</span>
+          <span class="pad-eq">=</span>
+          <span class="pad-value" :class="{ empty: text === '' }">{{ text === '' ? '?' : text }}</span>
+        </slot>
       </div>
       <div class="pad-grid">
         <button v-for="d in [1, 2, 3, 4, 5, 6, 7, 8, 9]" :key="d" type="button" class="pad-key" @click="press(d)">{{ d }}</button>
@@ -85,6 +88,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .pad-display {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 12px;
