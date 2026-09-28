@@ -12,20 +12,17 @@ function load() {
   }
 }
 
-function defaultLang() {
-  try {
-    return navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'
-  } catch {
-    return 'zh'
-  }
-}
-
 const saved = load()
+
+// 默认中文；只有自己点过切换、选了英文，才显示英文
+function initialLang(settings = {}) {
+  return settings.langChosen && settings.lang === 'en' ? 'en' : 'zh'
+}
 
 export const progress = reactive({
   // 每关最好的星星数，例如 { '1-1': { stars: 3 } }
   levels: saved.levels || {},
-  settings: { lang: defaultLang(), sound: true, unlockAll: false, ...(saved.settings || {}) },
+  settings: { sound: true, unlockAll: false, ...(saved.settings || {}), lang: initialLang(saved.settings) },
 })
 
 watch(
@@ -39,6 +36,11 @@ watch(
   },
   { deep: true },
 )
+
+export function setLang(lang) {
+  progress.settings.lang = lang
+  progress.settings.langChosen = true
+}
 
 export function starsOf(id) {
   return progress.levels[id]?.stars || 0

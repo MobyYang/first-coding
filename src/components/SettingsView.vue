@@ -3,14 +3,14 @@
 import { ref } from 'vue'
 import { t } from '../i18n.js'
 import { play } from '../sound.js'
-import { progress, resetProgress } from '../store.js'
+import { progress, resetProgress, setLang as chooseLang } from '../store.js'
 
 const emit = defineEmits(['back'])
 const confirming = ref(false)
 const cleared = ref(false)
 
 function setLang(lang) {
-  progress.settings.lang = lang
+  chooseLang(lang)
   play('tap')
 }
 

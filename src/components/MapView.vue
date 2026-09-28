@@ -5,7 +5,7 @@ import OwlSays from './OwlSays.vue'
 import { LEVELS, WORLDS } from '../core/levels.js'
 import { t } from '../i18n.js'
 import { play } from '../sound.js'
-import { isUnlocked, nextLevelToPlay, progress, starsOf, totalStars } from '../store.js'
+import { isUnlocked, nextLevelToPlay, progress, setLang, starsOf, totalStars } from '../store.js'
 
 const emit = defineEmits(['play', 'stickers', 'settings'])
 
@@ -22,7 +22,7 @@ function open(level) {
 }
 
 function toggleLang() {
-  progress.settings.lang = progress.settings.lang === 'zh' ? 'en' : 'zh'
+  setLang(progress.settings.lang === 'zh' ? 'en' : 'zh')
   play('tap')
 }
 </script>
