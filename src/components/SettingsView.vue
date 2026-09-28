@@ -1,0 +1,192 @@
+<script setup>
+// 设置 + 给家长的说明
+import { ref } from 'vue'
+import { t } from '../i18n.js'
+import { play } from '../sound.js'
+import { progress, resetProgress } from '../store.js'
+
+const emit = defineEmits(['back'])
+const confirming = ref(false)
+const cleared = ref(false)
+
+function setLang(lang) {
+  progress.settings.lang = lang
+  play('tap')
+}
+
+function toggle(key) {
+  progress.settings[key] = !progress.settings[key]
+  play('tap')
+}
+
+function onReset() {
+  if (!confirming.value) {
+    confirming.value = true
+    cleared.value = false
+    return
+  }
+  resetProgress()
+  confirming.value = false
+  cleared.value = true
+}
+
+const TOOLS = [
+  { icon: '✂️', name: 'tool.share', method: 'parents.share' },
+  { icon: '✋', name: 'tool.takeAway', method: 'parents.takeAway' },
+  { icon: '🔄', name: 'tool.swap', method: 'parents.swap' },
+  { icon: '➕', name: 'tool.combine', method: 'parents.combine' },
+]
+</script>
+
+<template>
+  <div class="page">
+    <header class="page-top">
+      <button type="button" class="btn btn-soft btn-small" @click="emit('back')">← {{ t('common.back') }}</button>
+      <h1 class="page-title">⚙️ {{ t('settings.title') }}</h1>
+    </header>
+
+    <section class="panel">
+      <div class="setting">
+        <span class="setting-name">{{ t('settings.lang') }}</span>
+        <div class="segmented" role="group" :aria-label="t('settings.lang')">
+          <button type="button" :class="{ on: progress.settings.lang === 'zh' }" :aria-pressed="progress.settings.lang === 'zh'" @click="setLang('zh')">中文</button>
+          <button type="button" :class="{ on: progress.settings.lang === 'en' }" :aria-pressed="progress.settings.lang === 'en'" @click="setLang('en')">English</button>
+        </div>
+      </div>
+      <div class="setting">
+        <span class="setting-name">{{ t('settings.sound') }}</span>
+        <button type="button" class="switch" :class="{ on: progress.settings.sound }" role="switch" :aria-checked="progress.settings.sound" @click="toggle('sound')">
+          {{ progress.settings.sound ? `🔊 ${t('settings.on')}` : `🔇 ${t('settings.off')}` }}
+        </button>
+      </div>
+      <div class="setting">
+        <span class="setting-name">
+          {{ t('settings.unlock') }}
+          <small>{{ t('settings.unlockDesc') }}</small>
+        </span>
+        <button type="button" class="switch" :class="{ on: progress.settings.unlockAll }" role="switch" :aria-checked="progress.settings.unlockAll" @click="toggle('unlockAll')">
+          {{ progress.settings.unlockAll ? `🔓 ${t('settings.on')}` : `🔒 ${t('settings.off')}` }}
+        </button>
+      </div>
+      <div class="setting">
+        <span class="setting-name">{{ t('settings.reset') }}</span>
+        <button type="button" class="btn btn-small" :class="confirming ? 'btn-danger' : 'btn-soft'" @click="onReset">
+          {{ confirming ? t('settings.resetConfirm') : cleared ? `✓ ${t('settings.resetDone')}` : t('settings.reset') }}
+        </button>
+      </div>
+      <p class="note">{{ t('settings.saved') }}</p>
+    </section>
+
+    <section class="panel parents">
+      <h2>👪 {{ t('parents.title') }}</h2>
+      <p>{{ t('parents.p1') }}</p>
+      <p>{{ t('parents.p2') }}</p>
+      <ul class="tool-map">
+        <li v-for="tool in TOOLS" :key="tool.name">
+          <span class="tool-name">{{ tool.icon }} {{ t(tool.name, { v: '' }).trim() }}</span>
+          <span class="tool-arrow" aria-hidden="true">→</span>
+          <span>{{ t(tool.method) }}</span>
+        </li>
+      </ul>
+      <p>{{ t('parents.p3') }}</p>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.panel {
+  display: grid;
+  gap: 4px;
+  padding: 8px 16px 14px;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 2px solid var(--paper-line);
+}
+.setting-name {
+  display: grid;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.setting-name small {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.segmented {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 14px;
+  background: #f1ebdc;
+}
+.segmented button,
+.switch {
+  min-height: 44px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.segmented button.on {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 0 var(--paper-line);
+}
+.switch {
+  background: #f1ebdc;
+}
+.switch.on {
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+.note {
+  margin: 10px 0 0;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.parents h2 {
+  margin: 8px 0 4px;
+  font-size: 1.3rem;
+}
+.parents p {
+  margin: 6px 0;
+  line-height: 1.6;
+  max-width: 65ch;
+}
+.tool-map {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.tool-map li {
+  display: grid;
+  grid-template-columns: minmax(7.5em, auto) auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--teal-soft);
+}
+.tool-name {
+  font-weight: 700;
+  color: #0d5f68;
+}
+.tool-arrow {
+  color: var(--ink-soft);
+}
+</style>
