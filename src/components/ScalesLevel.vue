@@ -1,5 +1,6 @@
 <script setup>
 // 天平关卡：几架平衡的天平（线索）+ 侦探道具 + 侦探笔记 + 称一称
+// 道具只负责摆天平，右边的算术要孩子自己算；答案也要孩子自己写进笔记，再称一称检查。
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import BalanceScale from './BalanceScale.vue'
 import ConfettiBurst from './ConfettiBurst.vue'
@@ -19,6 +20,7 @@ import {
   discoveredValues,
   getScale,
   isSolved,
+  moveArithmetic,
   shareFactor,
   swapTimes,
   weighAll,
@@ -45,8 +47,10 @@ const puzzle = computed(() => puzzles[index.value])
 const board = ref(puzzle.value.board)
 const history = ref([])
 const guesses = reactive({})
+const lastWeighed = ref(null)
 const weighValues = ref(null)
 const pending = ref(null)
+const calc = ref(null)
 const hint = ref(null)
 const penalty = ref(0)
 const event = ref(null)
@@ -78,48 +82,79 @@ function say(key, params = {}, mood = 'think') {
   message.value = { key, params, mood }
 }
 
-// —— 提示 ——
-function sameMove(a, b) {
+// —— 提示：第一次给思路，第二次告诉用哪个道具；从不替孩子操作，也不说答案 ——
+function notesKey() {
+  return JSON.stringify(items.value.map((item) => guesses[item] ?? null))
+}
+function notesComplete() {
+  return items.value.every((item) => guesses[item] != null)
+}
+
+function currentSubject() {
+  if (notesComplete() && lastWeighed.value !== notesKey()) return { type: 'weigh' }
+  if (isSolved(board.value)) return { type: 'record' }
+  const plan = planSolution(board.value, tools)
+  if (plan && plan.length) return { type: 'move', move: plan[0] }
+  return { type: 'stuck' }
+}
+
+function sameSubject(a, b) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-function hintText(move) {
+function thinkText(move) {
+  if (move.type === 'share') return t('think.share', { id: move.scaleId })
+  if (move.type === 'takeAway') return t('think.takeAway', { id: move.scaleId })
+  if (move.type === 'swap') {
+    return discovered(getScale(board.value, move.sourceId))
+      ? t('think.swapKnown')
+      : t('think.swapBundle', { src: move.sourceId, dst: move.targetId })
+  }
+  if (move.type === 'combine') return t('think.combine', { a: move.aId, b: move.bId })
+  return t('think.remove')
+}
+
+function toolText(move) {
   const b = board.value
   const p = pending.value
-  let text = ''
+  if (move.type === 'share') return t('hint.share', { id: move.scaleId, n: shareFactor(getScale(b, move.scaleId)) })
   if (move.type === 'takeAway') {
     const s = getScale(b, move.scaleId)
-    text = t('hint.takeAway', { id: s.id, v: s.blocks[move.index ?? 0] })
-  } else if (move.type === 'share') {
-    const s = getScale(b, move.scaleId)
-    text = t('hint.share', { id: s.id, n: shareFactor(s) })
-  } else if (move.type === 'swap') {
-    const src = getScale(b, move.sourceId)
-    const d = discovered(src)
-    if (p?.type === 'swap' && p.id === move.sourceId) text = t('hint.swapTarget', { dst: move.targetId })
-    else if (d) text = t('hint.swapKnown', { item: itemLabel(d.item), v: d.value, src: src.id, dst: move.targetId })
-    else text = t('hint.swapBundle', { src: src.id, dst: move.targetId, v: src.right })
-  } else if (move.type === 'combine') {
-    text =
-      p?.type === 'combine' && p.id === move.aId
-        ? t('hint.combineTarget', { b: move.bId })
-        : t('hint.combine', { a: move.aId, b: move.bId })
-  } else if (move.type === 'remove') {
-    text = t('hint.remove', { id: move.scaleId })
+    return t('hint.takeAway', { id: s.id, v: s.blocks[move.index ?? 0] })
   }
-  return hint.value?.pressed ? `${text} ${t('hint.again')}` : text
+  if (move.type === 'swap') {
+    if (p?.type === 'swap' && p.id === move.sourceId) return t('hint.swapTarget', { dst: move.targetId })
+    return discovered(getScale(b, move.sourceId))
+      ? t('hint.swapKnown', { src: move.sourceId, dst: move.targetId })
+      : t('hint.swapBundle', { src: move.sourceId, dst: move.targetId })
+  }
+  if (move.type === 'combine') {
+    return p?.type === 'combine' && p.id === move.aId
+      ? t('hint.combineTarget', { b: move.bId })
+      : t('hint.combine', { a: move.aId, b: move.bId })
+  }
+  return t('hint.remove', { id: move.scaleId })
+}
+
+function hintText(h) {
+  const { subject, level } = h
+  if (subject.type === 'stuck') return t('hint.stuck')
+  if (subject.type === 'weigh') return t(level === 1 ? 'think.weigh' : 'hint.weigh')
+  if (subject.type === 'record') return t(level === 1 ? 'think.record' : 'hint.record')
+  return level === 1 ? thinkText(subject.move) : toolText(subject.move)
 }
 
 const bubble = computed(() => {
-  if (hint.value && phase.value === 'play') return { text: hintText(hint.value.move), mood: 'think' }
+  if (hint.value && phase.value === 'play') return { text: hintText(hint.value), mood: 'think' }
   return { text: t(message.value.key, message.value.params), mood: message.value.mood }
 })
 
-// 提示要让哪架天平上的哪个按钮闪
+// 第二级提示才让按钮闪
 const focus = computed(() => {
-  const move = hint.value?.move
+  const h = hint.value
+  if (!h || h.level < 2 || phase.value !== 'play' || h.subject.type !== 'move') return {}
+  const move = h.subject.move
   const p = pending.value
-  if (!move || phase.value !== 'play') return {}
   if (move.type === 'share') return { [move.scaleId]: 'share' }
   if (move.type === 'takeAway') return { [move.scaleId]: 'take' }
   if (move.type === 'remove') return { [move.scaleId]: 'remove' }
@@ -132,39 +167,33 @@ const focus = computed(() => {
   return {}
 })
 
+const noteFocus = computed(() => {
+  const h = hint.value
+  if (!h || h.level < 2 || h.subject.type !== 'record') return []
+  return items.value.filter((item) => guesses[item] !== found.value[item])
+})
+const weighFocus = computed(() => hint.value?.level === 2 && hint.value.subject.type === 'weigh')
+
 function showGuide() {
-  if (phase.value !== 'play') return
-  const plan = planSolution(board.value, tools)
-  hint.value = plan && plan.length ? { move: plan[0], pressed: false } : null
+  if (phase.value !== 'play' || calc.value || padItem.value) return
+  hint.value = { subject: currentSubject(), level: 2 }
 }
 
 function onHint() {
   if (phase.value !== 'play') return
   play('tap')
-  const plan = planSolution(board.value, tools)
-  if (!plan || !plan.length) {
-    hint.value = null
-    stuck.value = true
-    say('hint.stuck', {}, 'oops')
-    return
-  }
-  const move = plan[0]
-  if (hint.value?.pressed && sameMove(hint.value.move, move)) {
-    // 第二次点提示：帮孩子做这一步
-    if (!guided.value) penalty.value++
-    hint.value = null
-    pending.value = null
-    say('hint.auto', {}, 'happy')
-    const snapshot = board.value
-    later(() => {
-      if (board.value === snapshot) commit(move)
-    }, 700)
-    return
-  }
+  const subject = currentSubject()
+  const same = hint.value && sameSubject(hint.value.subject, subject)
+  if (same && hint.value.level >= 2) return
   if (!guided.value) penalty.value++
-  const keepPending = pending.value && pending.value.type === move.type && pending.value.id === (move.sourceId ?? move.aId)
+  const keepPending =
+    subject.type === 'move' &&
+    pending.value &&
+    pending.value.type === subject.move.type &&
+    pending.value.id === (subject.move.sourceId ?? subject.move.aId)
   if (!keepPending) pending.value = null
-  hint.value = { move, pressed: true }
+  stuck.value = subject.type === 'stuck'
+  hint.value = { subject, level: same ? 2 : 1 }
 }
 
 // —— 道具 ——
@@ -199,19 +228,82 @@ function commit(move) {
   const nowFound = discoveredValues(next)
   const newItem = next.items.find((item) => nowFound[item] !== undefined && beforeFound[item] === undefined)
   if (newItem !== undefined) {
-    say('msg.found', { item: itemLabel(newItem), v: nowFound[newItem] }, 'wow')
+    const scale = next.scales.find((s) => discovered(s)?.item === newItem)
+    say('msg.found', { id: scale.id, item: itemLabel(newItem) }, 'wow')
     play('found')
   } else {
     const e = event.value
-    if (move.type === 'share') say('msg.shared', { n: e.factor }, 'happy')
-    else if (move.type === 'takeAway') say('msg.took', { v: e.amount }, 'happy')
-    else if (move.type === 'swap') say('msg.swapped', {}, 'happy')
+    if (move.type === 'swap') say('msg.swapped', {}, 'happy')
     else if (move.type === 'combine') say('msg.combined', { id: e.scaleIds[0] }, 'wow')
-    else say('msg.removed', {}, 'think')
+    else if (move.type === 'remove') say('msg.removed', {}, 'think')
+    else say('msg.calcRight', {}, 'happy')
     play('move')
   }
-  if (isSolved(next)) later(solve, 900)
-  else if (guided.value) later(showGuide, newItem !== undefined ? 1600 : 1200)
+  if (guided.value) later(showGuide, newItem !== undefined ? 1800 : 1300)
+}
+
+// 分一分、拿走、合一合：先让孩子算出右边变成多少，算对了天平才变
+function startMove(move) {
+  const arithmetic = moveArithmetic(board.value, move)
+  if (!arithmetic) {
+    commit(move)
+    return
+  }
+  play('select')
+  hint.value = null
+  calc.value = { move, arithmetic, feedback: '', attempt: 0 }
+}
+
+function calcTip(a) {
+  if (a.op === '÷') return t('calc.tip.share', { n: a.b, total: a.a })
+  if (a.op === '−') return t('calc.tip.takeAway', { v: a.b, total: a.a })
+  return a.a >= 10 || a.b >= 10 ? t('calc.tip.combine') : t('calc.tip.combineSmall', { a: a.a, b: a.b })
+}
+
+const calcView = computed(() => {
+  const c = calc.value
+  if (!c) return null
+  const { move, arithmetic: a } = c
+  let heading
+  let explain
+  if (move.type === 'share') {
+    heading = `✂️ ${t('tool.share')} · ${t('level.clue', { id: move.scaleId })}`
+    explain = t('calc.share', { n: a.b })
+  } else if (move.type === 'takeAway') {
+    heading = `✋ ${t('tool.takeAway', { v: a.b })} · ${t('level.clue', { id: move.scaleId })}`
+    explain = t('calc.takeAway', { v: a.b })
+  } else {
+    heading = `➕ ${t('tool.combine')} · ${move.aId} + ${move.bId}`
+    explain = t('calc.combine')
+  }
+  return { heading, explain, expression: `${a.a} ${a.op} ${a.b}` }
+})
+
+function onCalcDone(value) {
+  const c = calc.value
+  if (!c) return
+  if (value === c.arithmetic.result) {
+    calc.value = null
+    commit(c.move)
+    return
+  }
+  if (!guided.value) penalty.value++
+  play('wrong')
+  calc.value = { ...c, feedback: `${t('calc.wrong')} ${calcTip(c.arithmetic)}`, attempt: c.attempt + 1 }
+}
+
+function onCalcTip() {
+  const c = calc.value
+  if (!c) return
+  play('tap')
+  calc.value = { ...c, feedback: calcTip(c.arithmetic) }
+}
+
+function onCalcClose() {
+  calc.value = null
+  pending.value = null
+  play('tap')
+  if (guided.value) later(showGuide, 600)
 }
 
 function toolsFor(scale) {
@@ -274,11 +366,11 @@ function mathLabel(tool) {
 }
 
 function onTool(scale, tool) {
-  const move = hint.value?.move
-  if (tool.name === 'take') commit({ type: 'takeAway', scaleId: scale.id, index: 0 })
-  else if (tool.name === 'share') commit({ type: 'share', scaleId: scale.id })
+  const move = hint.value?.subject?.move
+  if (tool.name === 'take') startMove({ type: 'takeAway', scaleId: scale.id, index: 0 })
+  else if (tool.name === 'share') startMove({ type: 'share', scaleId: scale.id })
   else if (tool.name === 'swapHere') commit({ type: 'swap', sourceId: pending.value.id, targetId: scale.id })
-  else if (tool.name === 'combineHere') commit({ type: 'combine', aId: pending.value.id, bId: scale.id })
+  else if (tool.name === 'combineHere') startMove({ type: 'combine', aId: pending.value.id, bId: scale.id })
   else if (tool.name === 'remove') commit({ type: 'remove', scaleId: scale.id })
   else if (tool.name === 'cancel') {
     pending.value = null
@@ -310,13 +402,9 @@ function cardClass(scale) {
   }
 }
 
-// —— 侦探笔记和称一称 ——
-function noteValue(item) {
-  return found.value[item] ?? guesses[item] ?? null
-}
-
+// —— 侦探笔记和称一称：答案只来自孩子自己写的数字 ——
 function openPad(item) {
-  if (phase.value !== 'play' || found.value[item] !== undefined) return
+  if (phase.value !== 'play') return
   play('tap')
   padItem.value = item
 }
@@ -327,22 +415,31 @@ function setGuess(value) {
   if (value == null) delete guesses[item]
   else guesses[item] = value
   weighValues.value = null
+  hint.value = null
+  if (notesComplete()) say('msg.readyWeigh', {}, 'happy')
+  if (guided.value) later(showGuide, 500)
+}
+
+function closePad() {
+  padItem.value = null
+  if (guided.value) later(showGuide, 500)
 }
 
 function onWeigh() {
   if (phase.value !== 'play') return
   const values = {}
   for (const item of items.value) {
-    const v = noteValue(item)
-    if (v == null) {
+    if (guesses[item] == null) {
       say('msg.fill', {}, 'think')
       play('wrong')
       return
     }
-    values[item] = v
+    values[item] = guesses[item]
   }
+  clearTimers()
   pending.value = null
   hint.value = null
+  lastWeighed.value = notesKey()
   weighValues.value = values
   const tipped = weighAll(board.value, values).filter((r) => !r.balanced).length
   if (tipped === 0) {
@@ -352,6 +449,7 @@ function onWeigh() {
     if (!guided.value) penalty.value++
     say(tipped === 1 ? 'msg.tipped.one' : 'msg.tipped.many', { n: tipped }, 'oops')
     play('wrong')
+    if (guided.value) later(showGuide, 2600)
   }
 }
 
@@ -403,6 +501,7 @@ function nextCase() {
     board.value = puzzle.value.board
     history.value = []
     for (const key of Object.keys(guesses)) delete guesses[key]
+    lastWeighed.value = null
     weighValues.value = null
     pending.value = null
     hint.value = null
@@ -455,7 +554,7 @@ function nextCase() {
           :event="event"
           :takeable="canTapBlocks(scale)"
           :pulse-block="focus[scale.id] === 'take' ? 0 : -1"
-          @take="(i) => commit({ type: 'takeAway', scaleId: scale.id, index: i })"
+          @take="(i) => startMove({ type: 'takeAway', scaleId: scale.id, index: i })"
         />
         <EquationLine :scale="scale" :items="items" :theme="theme" />
         <div class="clue-tools">
@@ -482,16 +581,15 @@ function nextCase() {
           :key="`${index}-${item}`"
           type="button"
           class="note"
-          :class="{ known: found[item] !== undefined, empty: noteValue(item) == null }"
-          :aria-label="`${ITEMS[item][lang()]} = ${noteValue(item) ?? '?'}`"
+          :class="{ empty: guesses[item] == null, focus: noteFocus.includes(item) }"
+          :aria-label="`${ITEMS[item][lang()]} = ${guesses[item] ?? '?'}`"
           @click="openPad(item)"
         >
           <span class="note-item" :class="{ letter: ITEMS[item].letter }" :style="ITEMS[item].letter ? { color: ITEMS[item].color } : null">{{ itemLabel(item) }}</span>
           <span class="note-eq">=</span>
-          <span class="note-value">{{ noteValue(item) ?? '?' }}</span>
-          <span v-if="found[item] !== undefined" class="note-check" aria-hidden="true">✓</span>
+          <span class="note-value">{{ guesses[item] ?? '?' }}</span>
         </button>
-        <button type="button" class="btn btn-primary weigh" :disabled="phase !== 'play'" @click="onWeigh">⚖️ {{ t('level.weigh') }}</button>
+        <button type="button" class="btn btn-primary weigh" :class="{ pulse: weighFocus }" :disabled="phase !== 'play'" @click="onWeigh">⚖️ {{ t('level.weigh') }}</button>
       </div>
     </footer>
 
@@ -517,7 +615,19 @@ function nextCase() {
       :letter="Boolean(ITEMS[padItem].letter)"
       :initial="guesses[padItem] ?? null"
       @done="setGuess"
-      @close="padItem = null"
+      @close="closePad"
+    />
+    <NumberPad
+      v-if="calcView"
+      :heading="calcView.heading"
+      :explain="calcView.explain"
+      :expression="calcView.expression"
+      :feedback="calc.feedback"
+      :attempt="calc.attempt"
+      show-tip
+      @done="onCalcDone"
+      @tip="onCalcTip"
+      @close="onCalcClose"
     />
     <LevelResult
       v-if="phase === 'done' && result"
@@ -693,11 +803,8 @@ function nextCase() {
   border-style: dashed;
   color: var(--ink-soft);
 }
-.note.known {
-  border-color: var(--leaf);
-  background: var(--leaf-soft);
-  color: var(--leaf);
-  cursor: default;
+.note.focus {
+  animation: pulse-btn 1s ease-in-out infinite;
 }
 .note-item {
   font-family: var(--emoji);
@@ -708,9 +815,6 @@ function nextCase() {
 }
 .note-eq {
   color: var(--ink-soft);
-}
-.note-check {
-  font-size: 1.1rem;
 }
 .weigh {
   margin-left: auto;

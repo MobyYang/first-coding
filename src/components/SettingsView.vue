@@ -89,6 +89,7 @@ const TOOLS = [
         </li>
       </ul>
       <p>{{ t('parents.p3') }}</p>
+      <p>{{ t('parents.p4') }}</p>
     </section>
   </div>
 </template>

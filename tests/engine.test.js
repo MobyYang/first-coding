@@ -15,6 +15,7 @@ import {
   isSolved,
   makeBoard,
   makeScale,
+  moveArithmetic,
   shareFactor,
   swapTimes,
   weighAll,
@@ -105,6 +106,20 @@ describe('scale moves', () => {
     )
     expect(canRemove(board, 'C')).toBe(false)
     expect(applyRemove(board, 'C')).toBeNull()
+  })
+
+  it('leaves the arithmetic of each tool for the child', () => {
+    const shareBoard = makeBoard(['apple'], [makeScale('A', { apple: 5 }, 20)])
+    expect(moveArithmetic(shareBoard, { type: 'share', scaleId: 'A' })).toEqual({ op: '÷', a: 20, b: 5, result: 4 })
+    const takeBoard = makeBoard(['apple'], [makeScale('A', { apple: 1 }, 9, [5])])
+    expect(moveArithmetic(takeBoard, { type: 'takeAway', scaleId: 'A', index: 0 })).toEqual({ op: '−', a: 9, b: 5, result: 4 })
+    const pair = makeBoard(
+      ['apple', 'banana'],
+      [makeScale('A', { apple: 2, banana: 1 }, 13), makeScale('B', { apple: 1, banana: 2 }, 14)],
+    )
+    expect(moveArithmetic(pair, { type: 'combine', aId: 'A', bId: 'B' })).toEqual({ op: '+', a: 13, b: 14, result: 27 })
+    expect(moveArithmetic(pair, { type: 'swap', sourceId: 'A', targetId: 'B' })).toBeNull()
+    expect(moveArithmetic(pair, { type: 'share', scaleId: 'A' })).toBeNull()
   })
 
   it('weighs guesses on every scale', () => {

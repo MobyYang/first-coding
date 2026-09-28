@@ -53,26 +53,24 @@ function say(key, params = {}, mood = 'think') {
   message.value = { key, params, mood }
 }
 
+// 提示：第一次问一个问题帮孩子想，第二次告诉用哪个按钮；从不替孩子放动物
 function hintMessage(h) {
-  const p = puzzle.value
-  return t(`cage.hint.${h.step}`, { h: p.heads, m: h.missing, e: h.extra })
+  const key = h.level === 1 ? `cage.think.${h.step}` : `cage.hint.${h.step}`
+  return t(key, { h: puzzle.value.heads })
 }
 
 const bubble = computed(() => {
-  if (hint.value && phase.value === 'play') {
-    const text = hintMessage(hint.value)
-    return { text: hint.value.pressed ? `${text} ${t('hint.again')}` : text, mood: 'think' }
-  }
+  if (hint.value && phase.value === 'play') return { text: hintMessage(hint.value), mood: 'think' }
   return { text: t(message.value.key, message.value.params), mood: message.value.mood }
 })
 
 function showGuide() {
   if (phase.value !== 'play') return
   const h = cageHint(puzzle.value, cage.value)
-  hint.value = h ? { ...h, pressed: false } : null
+  hint.value = h ? { ...h, level: 2 } : null
 }
 
-function act(action, { fromHint = false } = {}) {
+function act(action) {
   if (phase.value !== 'play') return
   const next = applyCage(cage.value, action)
   if (!next) {
@@ -82,10 +80,9 @@ function act(action, { fromHint = false } = {}) {
   }
   clearTimers()
   cage.value = next
-  if (!fromHint) hint.value = null
+  hint.value = null
   play(action.includes('To') ? 'found' : 'move')
   if (cageSolved(puzzle.value, next)) {
-    hint.value = null
     later(solve, 600)
   } else if (guided.value) {
     later(showGuide, 700)
@@ -97,15 +94,10 @@ function onHint() {
   play('tap')
   const h = cageHint(puzzle.value, cage.value)
   if (!h) return
-  if (hint.value?.pressed && hint.value.step === h.step) {
-    if (!guided.value) penalty.value++
-    say('hint.auto', {}, 'happy')
-    hint.value = null
-    act(h.action)
-    return
-  }
+  const same = hint.value && hint.value.step === h.step
+  if (same && hint.value.level >= 2) return
   if (!guided.value) penalty.value++
-  hint.value = { ...h, pressed: true }
+  hint.value = { ...h, level: same ? 2 : 1 }
 }
 
 function reset() {
@@ -212,7 +204,7 @@ const MAGIC = [
             :key="b.action"
             type="button"
             class="tool big"
-            :class="{ pulse: hint && hint.action === b.action }"
+            :class="{ pulse: hint && hint.level === 2 && hint.action === b.action }"
             :aria-label="t(b.label)"
             :disabled="phase !== 'play'"
             @click="act(b.action)"
@@ -226,7 +218,7 @@ const MAGIC = [
             :key="b.action"
             type="button"
             class="tool big magic"
-            :class="{ pulse: hint && hint.action === b.action }"
+            :class="{ pulse: hint && hint.level === 2 && hint.action === b.action }"
             :aria-label="t(b.label)"
             :disabled="phase !== 'play'"
             @click="act(b.action)"

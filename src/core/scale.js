@@ -200,6 +200,27 @@ export function applyMove(board, move) {
   }
 }
 
+// 用道具时，右盘要做的那道算术题。道具只负责摆天平，这道题留给孩子自己算。
+// 换一换和收起不需要算，返回 null。
+export function moveArithmetic(board, move) {
+  if (move.type === 'share') {
+    const scale = getScale(board, move.scaleId)
+    const n = scale ? shareFactor(scale) : 0
+    return n ? { op: '÷', a: scale.right, b: n, result: scale.right / n } : null
+  }
+  if (move.type === 'takeAway') {
+    const scale = getScale(board, move.scaleId)
+    const weight = scale?.blocks[move.index ?? 0]
+    return weight === undefined ? null : { op: '−', a: scale.right, b: weight, result: scale.right - weight }
+  }
+  if (move.type === 'combine' && canCombine(board, move.aId, move.bId)) {
+    const a = getScale(board, move.aId)
+    const b = getScale(board, move.bId)
+    return { op: '+', a: a.right, b: b.right, result: a.right + b.right }
+  }
+  return null
+}
+
 // 称一称：按孩子猜的重量，算出左盘有多重
 export function leftWeight(scale, values) {
   let sum = scale.blocks.reduce((s, w) => s + w, 0)
