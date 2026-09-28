@@ -86,7 +86,7 @@ function open(lesson) {
 }
 .hero-tagline {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -145,13 +145,14 @@ function open(lesson) {
   min-width: 0;
 }
 .lesson-title {
-  font-size: 1.25rem;
+  font-size: 1.45rem;
   font-weight: 700;
 }
 .lesson-goal {
-  color: var(--ink-soft);
-  font-size: 0.98rem;
-  line-height: 1.4;
+  color: var(--ink);
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 .lesson-example {
   display: flex;
@@ -161,7 +162,7 @@ function open(lesson) {
 }
 .lesson-example :deep(.equation) {
   justify-content: flex-start;
-  font-size: 1rem;
+  font-size: 1.15rem;
 }
 .lesson-side {
   display: grid;

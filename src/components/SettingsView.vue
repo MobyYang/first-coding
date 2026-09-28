@@ -140,7 +140,7 @@ const METHODS = [
 }
 .note {
   margin: 10px 0 0;
-  font-size: 0.92rem;
+  font-size: 1.02rem;
   color: var(--ink-soft);
   line-height: 1.5;
 }
@@ -150,7 +150,8 @@ const METHODS = [
 }
 .parents p {
   margin: 6px 0;
-  line-height: 1.6;
+  font-size: 1.15rem;
+  line-height: 1.65;
   max-width: 65ch;
 }
 .method-map {
@@ -163,6 +164,7 @@ const METHODS = [
 .method-map li {
   display: grid;
   grid-template-columns: minmax(9em, auto) auto 1fr;
+  font-size: 1.1rem;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;

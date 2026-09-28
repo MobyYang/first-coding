@@ -148,14 +148,14 @@ function replay() {
 }
 .step-count {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--teal);
   letter-spacing: 0.04em;
 }
 .step-text {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: clamp(1.25rem, 2.8vw, 1.5rem);
   line-height: 1.6;
   font-weight: 600;
   text-wrap: pretty;
@@ -169,6 +169,7 @@ function replay() {
 }
 .checks-title {
   margin: 0 0 2px;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--leaf);
 }
@@ -177,7 +178,7 @@ function replay() {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }

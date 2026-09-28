@@ -84,13 +84,13 @@ defineProps({
 .bubble {
   position: relative;
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 18px;
   background: var(--paper);
   border: 2px solid var(--ink);
-  border-radius: 16px;
-  font-size: 1rem;
-  line-height: 1.45;
-  font-weight: 500;
+  border-radius: 18px;
+  font-size: clamp(1.2rem, 2.6vw, 1.4rem);
+  line-height: 1.55;
+  font-weight: 600;
   color: var(--ink);
   min-width: 0;
   text-wrap: pretty;
