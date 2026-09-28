@@ -22,6 +22,8 @@ import { planSolution } from '../src/core/solver.js'
 import { lineValues } from '../src/core/tokens.js'
 import { buildWorking } from '../src/core/working.js'
 import { foundList, nextStepHint, planStep, practiceSolved, startPractice } from '../src/core/practice.js'
+import { buildLookWorking, lookFound, lookHint, lookSolved, planLook, startLook } from '../src/core/look.js'
+import { engineFor, exampleWorking } from '../src/core/styles.js'
 
 // 行列式不为 0 ⇔ 方程组只有一组解
 function determinant(matrix) {
@@ -397,7 +399,7 @@ const pair = (a, b) => makeBoard(['apple', 'banana'], [makeScale('A', a.counts, 
 const reasonOf = (board, choice) => planStep(startPractice({ board }), choice).reason?.code
 
 describe('practice: the child writes every step', () => {
-  for (const lesson of LESSONS) {
+  for (const lesson of LESSONS.filter((l) => l.style !== 'look')) {
     it(`lesson ${lesson.id}: a child who follows the step hints always finishes`, () => {
       followHints(exampleOf(lesson.id).puzzle, lesson)
       for (let seed = 1; seed <= 100; seed++) {
@@ -456,5 +458,91 @@ describe('practice: the child writes every step', () => {
     expect(res.ok).toBe(true)
     expect(res.step.lines.map((line) => tokensText(line.tokens))).toEqual(['4apple ÷ 2 = 20 ÷ 2', '2apple = 10'])
     expect(res.step.blanks.map((b) => `${b.id}=${b.value}`)).toEqual(['c-apple=2', 'r=10'])
+  })
+})
+
+// 看图算的一步：一句问话、一道普通算术（只有一个空）、所以……；算术和“所以”那一行代入答案都成立
+function expectLookStep(step, answer) {
+  const [ask, calc, so] = step.lines
+  expect(ask.kind).toBe('ask')
+  expect(step.blanks).toHaveLength(1)
+  const blank = step.blanks[0]
+  expect(calc.tokens.filter((tok) => tok.blank).map((tok) => tok.blank)).toEqual([blank.id])
+  const [left, right] = lineValues(calc.tokens, answer)
+  expect(left).toBe(right)
+  expect(right).toBe(blank.value)
+  expect(calc.tokens.some((tok) => tok.type === 'item')).toBe(false) // 算术里只有数
+  expect(so.lead).toBe(true)
+  expect(lineValues(so.tokens, answer)).toEqual([blank.value, blank.value])
+  expect(answer[step.found.item]).toBe(step.found.value)
+}
+
+function followLookHints(puzzle, state = startLook(puzzle)) {
+  for (let n = 0; n < 6 && !lookSolved(state); n++) {
+    const hint = lookHint(state)
+    expect(hint).toBeTruthy()
+    const res = planLook(state, hint)
+    expect(res.ok).toBe(true)
+    expectLookStep(res.step, puzzle.answer)
+    state = res.step.next
+  }
+  expect(lookSolved(state)).toBe(true)
+  expect(Object.fromEntries(lookFound(state).map((f) => [f.item, f.value]))).toEqual(puzzle.answer)
+  return state
+}
+
+describe('lesson 4: look and work it out (看图算)', () => {
+  const lesson = LESSONS.find((l) => l.id === '4')
+
+  it('uses the look style only for lesson 4', () => {
+    expect(LESSONS.filter((l) => l.style === 'look').map((l) => l.id)).toEqual(['4'])
+    expect(engineFor(lesson).plan).toBe(planLook)
+    expect(engineFor(LESSONS[2]).plan).toBe(planStep)
+  })
+
+  it('solves the example in two steps, one plain sum each', () => {
+    const { puzzle } = exampleOf('4')
+    const work = exampleWorking(lesson, puzzle)
+    expect(work.steps.map((step) => step.kind)).toEqual(['lookCompare', 'lookSwap'])
+    expect(work.steps.map((step) => tokensText(step.lines[1].tokens))).toEqual(['14 − 10 = 4', '10 − 4 = 6'])
+    expect(work.steps.map((step) => tokensText(step.lines[2].tokens))).toEqual(['apple = 4', 'banana = 6'])
+    expect(work.steps[0].info).toMatchObject({ big: 'B', small: 'A', extra: { apple: 1 }, common: { apple: 1, banana: 1 } })
+    expect(work.steps[0].visual).toMatchObject({ look: 'compare', cancel: { apple: 1, banana: 1 } })
+    expect(work.steps[1].visual.mid).toMatchObject({ counts: { banana: 1 }, blocks: [4], right: 10 })
+    expect(work.steps[1].visual.after).toMatchObject({ counts: { banana: 1 }, blocks: [], right: 6 })
+    work.steps.forEach((step) => expectLookStep(step, puzzle.answer))
+  })
+
+  it('always finishes when the child follows the hints', () => {
+    followLookHints(exampleOf('4').puzzle)
+    for (let seed = 1; seed <= 100; seed++) {
+      for (const problem of generateLevel(lesson, seed)) {
+        followLookHints(problem)
+        expect(buildLookWorking(problem).steps).toHaveLength(2)
+      }
+    }
+  })
+
+  it('lets the child swap into either scale', () => {
+    const { puzzle } = exampleOf('4')
+    const state = planLook(startLook(puzzle), { method: 'lookCompare', scale: 'A', other: 'B' }).step.next
+    const res = planLook(state, { method: 'lookSwap', item: 'apple', scale: 'B' })
+    expect(tokensText(res.step.lines[1].tokens)).toBe('14 − 2 × 4 = 6')
+    expect(res.step.visual.mid.blocks).toEqual([4, 4])
+    followLookHints(puzzle, res.step.next)
+  })
+
+  it('says why a step cannot be done', () => {
+    const { puzzle } = exampleOf('4')
+    const start = startLook(puzzle)
+    const reason = (state, choice) => planLook(state, choice).reason?.code
+    expect(reason(start, { method: 'lookSwap', item: 'apple', scale: 'A' })).toBe('lookNoKnown')
+    expect(reason(start, { method: 'lookCompare', scale: 'A', other: 'A' })).toBe('same')
+    expect(reason(start, { method: 'lookCompare', scale: 'A' })).toBe('pick')
+    const after = planLook(start, { method: 'lookCompare', scale: 'B', other: 'A' }).step.next
+    expect(reason(after, { method: 'lookCompare', scale: 'B', other: 'A' })).toBe('lookKnown')
+    const crossed = pair({ counts: { apple: 2, banana: 1 }, right: 13 }, { counts: { apple: 1, banana: 2 }, right: 14 })
+    expect(reason({ board: crossed, known: {} }, { method: 'lookCompare', scale: 'A', other: 'B' })).toBe('lookNoContain')
+    expect(lookHint({ board: crossed, known: {} })).toBeNull()
   })
 })

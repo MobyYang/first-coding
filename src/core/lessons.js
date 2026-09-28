@@ -2,6 +2,7 @@
 // 标题、要点等文字在 i18n.js 里（按课的 id）。
 // template：练习题用哪种出题模板；tools：讲解时可以用哪些方法；needs：这一课的讲解一定会用到的方法；
 // methods：练习时孩子自己列步骤，可以选哪些方法（只放学过的）；
+// style：'look' 是看图算（不写方程，比一比、换一换，每一步一道普通算术），第 4 课先试用；不写就是列算式；
 // example：讲解用的例题（items 是东西，values 是答案，clues 是每架天平左盘的个数和砝码）
 const ALL = ['share', 'takeAway', 'swap', 'combine']
 const NO_COMBINE = ['share', 'takeAway', 'swap']
@@ -41,8 +42,9 @@ export const LESSONS = [
     id: '4',
     template: 'bundle',
     theme: 'fruit',
+    style: 'look',
     tools: NO_COMBINE,
-    methods: SUBTRACT,
+    methods: ['lookCompare', 'lookSwap'],
     needs: ['swap'],
     example: { items: ['apple', 'banana'], values: [4, 6], clues: [{ counts: [1, 1] }, { counts: [2, 1] }] },
   },

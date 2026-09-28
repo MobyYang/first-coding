@@ -10,6 +10,7 @@ const props = defineProps({
   items: { type: Array, required: true },
   theme: { type: String, default: 'fruit' },
   event: { type: Object, default: null },
+  cancel: { type: Object, default: null }, // 比一比：每样东西划掉几个（一样的划掉，多出来的亮着）
 })
 
 const CX = 190
@@ -27,7 +28,10 @@ const pieces = computed(() => {
   const list = []
   for (const item of props.items) {
     const n = props.scale.counts[item] || 0
-    for (let copy = 0; copy < n; copy++) list.push({ key: `${item}-${copy}`, kind: 'item', item })
+    const crossed = props.cancel ? props.cancel[item] || 0 : 0
+    for (let copy = 0; copy < n; copy++) {
+      list.push({ key: `${item}-${copy}`, kind: 'item', item, cancelled: copy < crossed, extra: Boolean(props.cancel) && copy >= crossed })
+    }
   }
   const seen = {}
   props.scale.blocks.forEach((value, index) => {
@@ -171,13 +175,15 @@ const ariaLabel = computed(() => {
           class="piece"
           :style="{ transform: `translate(${p.x}px, ${p.y}px)` }"
         >
-          <g class="piece-inner">
+          <g class="piece-inner" :class="{ cancelled: p.cancelled }">
             <template v-if="p.kind === 'item'">
+              <circle v-if="p.extra" class="extra-glow" :r="19 * p.shrink" />
               <template v-if="ITEMS[p.item].letter">
                 <rect class="letter-box" :x="-14 * p.shrink" :y="-14 * p.shrink" :width="28 * p.shrink" :height="28 * p.shrink" rx="7" :style="{ fill: ITEMS[p.item].color }" />
                 <text class="letter" :font-size="22 * p.shrink" y="1">{{ ITEMS[p.item].letter }}</text>
               </template>
               <text v-else class="emoji" :font-size="28 * p.shrink" y="2">{{ ITEMS[p.item].emoji }}</text>
+              <line v-if="p.cancelled" class="strike" :x1="-16 * p.shrink" :y1="14 * p.shrink" :x2="16 * p.shrink" :y2="-14 * p.shrink" />
             </template>
             <template v-else>
               <path
@@ -283,6 +289,21 @@ const ariaLabel = computed(() => {
 .letter-box {
   stroke: rgba(29, 47, 79, 0.35);
   stroke-width: 2;
+}
+/* 比一比：一样的划掉，多出来的亮着 */
+.cancelled .emoji,
+.cancelled .letter-box,
+.cancelled .letter {
+  opacity: 0.35;
+}
+.strike {
+  stroke: var(--berry);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.extra-glow {
+  fill: var(--sun);
+  opacity: 0.55;
 }
 .letter {
   font-family: var(--font);

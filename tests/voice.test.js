@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LESSONS } from '../src/core/lessons.js'
 import { buildPuzzle } from '../src/core/generator.js'
-import { buildWorking } from '../src/core/working.js'
+import { exampleWorking } from '../src/core/styles.js'
 import { FIXED_LINES, lessonPages, lineText, recordedTexts } from '../src/narration.js'
 import { toSpeech, voiceKey } from '../src/speech.js'
 import { hasKey } from '../src/i18n.js'
@@ -38,7 +38,7 @@ describe('the teacher explaining each example', () => {
   it('has one page for the problem, one per step and one for the answer', () => {
     for (const lesson of LESSONS) {
       const { items, values, clues } = lesson.example
-      const work = buildWorking(buildPuzzle(lesson.template, values, clues, items), lesson.tools)
+      const work = exampleWorking(lesson, buildPuzzle(lesson.template, values, clues, items))
       const pages = lessonPages(lesson)
       expect(pages).toHaveLength(work.steps.length + 2)
       expect(pages[0]).toContain(lineText(work.given[0].tokens))
@@ -49,7 +49,7 @@ describe('the teacher explaining each example', () => {
   it('says every number that the step works out', () => {
     const lesson = LESSONS.find((l) => l.id === '5')
     const { items, values, clues } = lesson.example
-    const work = buildWorking(buildPuzzle(lesson.template, values, clues, items), lesson.tools)
+    const work = exampleWorking(lesson, buildPuzzle(lesson.template, values, clues, items))
     lessonPages(lesson)
       .slice(1, -1)
       .forEach((page, i) => {
@@ -66,6 +66,15 @@ describe('the teacher explaining each example', () => {
       expect(text.length).toBeLessThan(300)
     }
     for (const key of FIXED_LINES) expect(hasKey(key)).toBe(true)
+  })
+
+  it('reads lesson 4 the look-and-work way: ask, one sum, so …', () => {
+    const pages = lessonPages(LESSONS.find((l) => l.id === '4')).map((page) => toSpeech(page))
+    expect(pages).toHaveLength(4)
+    expect(pages[1]).toContain('第1步：比一比：B比A多1个苹果。')
+    expect(pages[1]).toContain('多出来的1个苹果有多重？14减10等于4。所以苹果等于4。')
+    expect(pages[2]).toContain('第2步：换一换：A里的苹果换成4。')
+    expect(pages[2]).toContain('香蕉有多重？10减4等于6。所以香蕉等于6。')
   })
 
   it('records Chinese even when the page is in English', () => {

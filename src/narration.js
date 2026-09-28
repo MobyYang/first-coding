@@ -2,8 +2,8 @@
 // 说的和演算纸上写的一样，只是把算式说成话（speech.js）。录音脚本也从这里取要录的话，录下来的正好是网页要读的。
 import { buildPuzzle } from './core/generator.js'
 import { LESSONS } from './core/lessons.js'
+import { exampleWorking } from './core/styles.js'
 import { leftTokens, op } from './core/tokens.js'
-import { buildWorking } from './core/working.js'
 import { lang, t } from './i18n.js'
 import { ITEMS, itemLabel } from './items.js'
 import { toSpeech } from './speech.js'
@@ -14,6 +14,7 @@ import { makeWords } from './words.js'
 export const FIXED_LINES = [
   'home.hello',
   'compose.start',
+  'compose.startLook',
   'work.wrong',
   'practice.right',
   'practice.rightFirst',
@@ -21,6 +22,7 @@ export const FIXED_LINES = [
   'no.pick',
   'no.shareOne',
   'no.subNothing',
+  'no.lookNoKnown',
   'no.same',
 ]
 
@@ -47,9 +49,15 @@ function countText(item, n) {
 }
 
 // 这一步怎么算：说出算的那个数，再说算出来的那一行
-function workText(step, items) {
+function workText(step, items, words) {
   const info = step.info
   const r = step.blanks.find((b) => b.id === 'r')?.value
+  // 看图算：问一句，算一道，所以……
+  if (step.kind.startsWith('look')) {
+    const [, sum, so] = step.lines
+    const calc = sum.tokens.slice(0, sum.tokens.findIndex((tok) => tok.type === 'op' && tok.text === '='))
+    return t('say.look', { ask: words.askText(step), calc: lineText(calc), r, line: lineText(so.tokens) })
+  }
   const last = step.lines[step.lines.length - 1]
   const line = lineText(last.kind === 'eq' ? last.tokens : [...leftTokens(items, last.result.counts), op('='), last.result.right])
   switch (step.kind) {
@@ -89,7 +97,7 @@ export function examplePages({ lessonId, work, words }) {
   ]
   const steps = work.steps.map((step, i) => {
     const title = step.titleNumber ? `${words.titleText(step)} ${step.titleNumber.value}` : words.titleText(step)
-    return [t('say.step', { no: t('work.stepNo', { n: i + 1 }), title }), words.whyText(step), workText(step, items)]
+    return [t('say.step', { no: t('work.stepNo', { n: i + 1 }), title }), words.whyText(step), workText(step, items, words)]
   })
   const end = [
     sentence(t('work.answer', { answers: words.answersText(work.answer) })),
@@ -104,7 +112,7 @@ export function examplePages({ lessonId, work, words }) {
 export function lessonPages(lesson) {
   const { items, values, clues } = lesson.example
   const puzzle = buildPuzzle(lesson.template, values, clues, items)
-  return examplePages({ lessonId: lesson.id, work: buildWorking(puzzle, lesson.tools), words: makeWords(puzzle.items, lesson.theme) })
+  return examplePages({ lessonId: lesson.id, work: exampleWorking(lesson, puzzle), words: makeWords(puzzle.items, lesson.theme) })
 }
 
 // 要录音的话（中文）：7 课例题的每一页，再加上几句固定的话

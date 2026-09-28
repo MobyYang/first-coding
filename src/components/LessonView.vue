@@ -14,9 +14,8 @@ import WorkSheet from './WorkSheet.vue'
 import WorkTokens from './WorkTokens.vue'
 import { buildPuzzle, generateLevel } from '../core/generator.js'
 import { starsFor } from '../core/lessons.js'
-import { currentLines, foundList, nextStepHint, planStep, practiceSolved, problemSheet, startPractice } from '../core/practice.js'
 import { randomSeed } from '../core/random.js'
-import { buildWorking } from '../core/working.js'
+import { engineFor, exampleWorking } from '../core/styles.js'
 import { t, template } from '../i18n.js'
 import { play } from '../sound.js'
 import { progress, recordLesson } from '../store.js'
@@ -32,9 +31,12 @@ const emit = defineEmits(['home', 'again', 'next'])
 const STEP_PAUSE = 1500 // 一步算对以后，停一会儿看天平怎么变，再列下一步
 
 const theme = props.lesson.theme
+// 列算式，还是看图算（第 4 课）：练习和例题都按这一课的写法
+const engine = engineFor(props.lesson)
+const look = props.lesson.style === 'look'
 const { items: exItems, values: exValues, clues: exClues } = props.lesson.example
 const example = buildPuzzle(props.lesson.template, exValues, exClues, exItems)
-const exampleWork = buildWorking(example, props.lesson.tools)
+const exampleWork = exampleWorking(props.lesson, example)
 const exampleWords = makeWords(example.items, theme)
 const problems = generateLevel(props.lesson, randomSeed())
 
@@ -42,10 +44,10 @@ const phase = ref('teach')
 const index = ref(0)
 const problem = computed(() => problems[index.value])
 const words = computed(() => makeWords(problem.value.items, theme))
-const sheet = computed(() => problemSheet(problem.value))
+const sheet = computed(() => engine.sheet(problem.value))
 
 // —— 孩子列的步骤 ——
-const states = ref([startPractice(problems[0])]) // 每写完一步，多一个“现在的样子”
+const states = ref([engine.start(problems[0])]) // 每写完一步，多一个“现在的样子”
 const history = ref([]) // 写完、算对的步骤
 const planned = ref(null) // 列好了、正在算结果的这一步
 const choice = reactive({ method: null, scale: null, other: null, item: null, number: null })
@@ -68,8 +70,8 @@ let pause = 0
 
 const state = computed(() => states.value[states.value.length - 1])
 const work = computed(() => ({ ...sheet.value, steps: planned.value ? [...history.value, planned.value] : history.value }))
-const lines = computed(() => currentLines(state.value))
-const found = computed(() => foundList(state.value))
+const lines = computed(() => engine.lines(state.value))
+const found = computed(() => engine.found(state.value))
 const nextBlank = computed(() => planned.value?.blanks.find((b) => values[b.id] !== b.value)?.id ?? null)
 const padBlank = computed(() => (pad.value?.kind === 'blank' ? pad.value.id : null))
 const canUndo = computed(() => !solved.value && !finished.value && Boolean(planned.value || history.value.length))
@@ -91,7 +93,7 @@ function resetChoice() {
 
 function resetProblem() {
   clearTimeout(pause)
-  states.value = [startPractice(problem.value)]
+  states.value = [engine.start(problem.value)]
   history.value = []
   planned.value = null
   resetChoice()
@@ -103,7 +105,7 @@ function resetProblem() {
   helped.value = false
   hintLevel.value = 0
   tip.value = null
-  message.value = { text: t('compose.start'), mood: 'think' }
+  message.value = { text: t(look ? 'compose.startLook' : 'compose.start'), mood: 'think' }
 }
 
 async function goPractice() {
@@ -127,13 +129,15 @@ function chooseMethod(method) {
   resetChoice()
   choice.method = method
   if (lines.value.length === 1) choice.scale = lines.value[0].scale.id
-  if (method === 'substitute' && found.value.length === 1) choice.item = found.value[0].item
+  // 比一比只有两架天平可比：两架都放上（谁比谁多不用孩子排）
+  if (method === 'lookCompare' && lines.value.length === 2) Object.assign(choice, { scale: lines.value[0].scale.id, other: lines.value[1].scale.id })
+  if ((method === 'substitute' || method === 'lookSwap') && found.value.length === 1) choice.item = found.value[0].item
   message.value = null
 }
 
 function pickScale(id) {
   play('tap')
-  if (choice.method === 'subtract' || choice.method === 'add') {
+  if (['subtract', 'add', 'lookCompare'].includes(choice.method)) {
     choice[gap.value] = id
     gap.value = gap.value === 'scale' ? 'other' : 'scale'
   } else {
@@ -157,7 +161,7 @@ function openNumber() {
 
 // 写出来：能这样做就写进演算纸，不能就说为什么
 function confirmStep() {
-  const res = planStep(state.value, choice)
+  const res = engine.plan(state.value, choice)
   if (!res.ok) {
     mistakes.value = true
     message.value = { text: words.value.reasonText(res.reason), mood: 'oops' }
@@ -214,7 +218,7 @@ function enter(value) {
 // 这一步算对了：打勾，天平跟着变，停一会儿再列下一步
 function finishStep() {
   finished.value = true
-  tip.value = practiceSolved(planned.value.next) ? null : { text: t('compose.stepRight'), mood: 'happy' }
+  tip.value = engine.solved(planned.value.next) ? null : { text: t('compose.stepRight'), mood: 'happy' }
   play('move')
   clearTimeout(pause)
   pause = setTimeout(commitStep, STEP_PAUSE)
@@ -231,7 +235,7 @@ function commitStep() {
   tip.value = null
   resetChoice()
   hintLevel.value = 0
-  if (practiceSolved(done.next)) {
+  if (engine.solved(done.next)) {
     solved.value = true
     message.value = null
     if (!mistakes.value && !helped.value) firstTry.value++
@@ -275,7 +279,7 @@ function hint() {
     }
     return
   }
-  const next = nextStepHint(state.value, props.lesson.methods)
+  const next = engine.hint(state.value, props.lesson.methods)
   if (!next) message.value = { text: t('next.stuck'), mood: 'think' }
   else message.value = { text: hintLevel.value === 0 ? words.value.nextThink(next) : words.value.nextDo(next), mood: 'think' }
   hintLevel.value = 1
@@ -373,8 +377,7 @@ const eyebrow = computed(() =>
     <StepPlayer
       v-if="phase === 'teach'"
       :lesson-id="lesson.id"
-      :puzzle="example"
-      :tools="lesson.tools"
+      :work="exampleWork"
       :theme="theme"
       :finish-label="t('teach.startPractice')"
       @finish="goPractice"
@@ -440,7 +443,7 @@ const eyebrow = computed(() =>
         <span class="pad-line">
           <template v-if="pad.kind === 'number'">{{ padSentence(text) }}</template>
           <template v-else-if="padLine">
-            <span class="pad-tag">{{ padLine.tag }}</span>
+            <span v-if="padLine.tag" class="pad-tag">{{ padLine.tag }}</span>
             <WorkTokens :tokens="padLine.tokens" mode="do" :values="values" :active="padBlank" :typing="text" />
           </template>
         </span>

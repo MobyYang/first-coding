@@ -4,7 +4,6 @@
 // 老师讲解：每翻一页，老师把这一页读出来（第几步、做什么、为什么、怎么算），可以“再听一遍”。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import WorkSheet from './WorkSheet.vue'
-import { buildWorking } from '../core/working.js'
 import { t } from '../i18n.js'
 import { examplePages } from '../narration.js'
 import { play } from '../sound.js'
@@ -14,15 +13,14 @@ import { makeWords } from '../words.js'
 
 const props = defineProps({
   lessonId: { type: String, required: true },
-  puzzle: { type: Object, required: true },
-  tools: { type: Array, required: true },
+  work: { type: Object, required: true }, // 例题的演算（列算式或看图算，见 core/styles.js）
   theme: { type: String, default: 'fruit' },
   finishLabel: { type: String, required: true },
 })
 const emit = defineEmits(['finish'])
 
-const words = makeWords(props.puzzle.items, props.theme)
-const work = buildWorking(props.puzzle, props.tools)
+const words = makeWords(props.work.items, props.theme)
+const work = props.work
 const total = work.steps.length
 // 0：只写题目；1…total：写到第几步；total + 1：写出答案并检查
 const page = ref(0)

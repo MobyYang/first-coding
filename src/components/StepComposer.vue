@@ -22,12 +22,14 @@ const props = defineProps({
 })
 const emit = defineEmits(['method', 'scale', 'gap', 'item', 'number', 'confirm'])
 
-const two = computed(() => ['subtract', 'add'].includes(props.choice.method))
+// 两架天平的方法（比一比不分先后）；要用算出来的数的方法（代入、换一换）
+const two = computed(() => ['subtract', 'add', 'lookCompare'].includes(props.choice.method))
+const usesValue = computed(() => ['substitute', 'lookSwap'].includes(props.choice.method))
 const chosenValue = computed(() => props.found.find((f) => f.item === props.choice.item))
 const ready = computed(() => {
   const c = props.choice
   if (c.method === 'share' || c.method === 'takeAway') return Boolean(c.scale && c.number)
-  if (c.method === 'substitute') return Boolean(c.item && c.scale)
+  if (usesValue.value) return Boolean(c.item && c.scale)
   if (two.value) return Boolean(c.scale && c.other)
   return false
 })
@@ -45,8 +47,11 @@ const sentence = computed(() => {
 })
 
 const pickLabel = computed(() => {
+  const method = props.choice.method
+  if (method === 'lookCompare') return t('compose.pickBoth')
   if (two.value) return t('compose.pickTwo')
-  return props.choice.method === 'substitute' ? t('compose.pickTarget') : t('compose.pickScale')
+  if (method === 'lookSwap') return t('compose.pickSwap')
+  return method === 'substitute' ? t('compose.pickTarget') : t('compose.pickScale')
 })
 const picked = (id) => props.choice.scale === id || props.choice.other === id
 </script>
@@ -73,8 +78,8 @@ const picked = (id) => props.choice.scale === id || props.choice.other === id
     </div>
 
     <template v-if="choice.method">
-      <!-- 代入：先选用哪个算出来的数 -->
-      <div v-if="choice.method === 'substitute' && found.length" class="found">
+      <!-- 代入、换一换：先选用哪个算出来的数 -->
+      <div v-if="usesValue && found.length" class="found">
         <span class="composer-label">{{ t('compose.whichValue') }}</span>
         <button
           v-for="f in found"

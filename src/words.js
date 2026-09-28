@@ -59,6 +59,10 @@ export function makeWords(items, theme) {
   function titleText(step) {
     const info = step.info
     switch (step.kind) {
+      case 'lookCompare':
+        return t('look.title.compare', { big: info.big, small: info.small, extra: extraWords(info.extra) })
+      case 'lookSwap':
+        return t('look.title.swap', { dst: info.dst, item: itemLabel(info.item), value: money(info.value) })
       case 'share':
         return t('work.share', { id: info.id })
       case 'takeAway':
@@ -78,6 +82,12 @@ export function makeWords(items, theme) {
   function whyText(step) {
     const info = step.info
     switch (step.kind) {
+      case 'lookCompare':
+        return t('look.why.compare', { big: info.big, small: info.small, common: itemsWords(info.common), extra: extraWords(info.extra) })
+      case 'lookSwap': {
+        const params = { item: itemLabel(info.item), value: money(info.value), dst: info.dst, n: info.times, right: money(info.right), other: itemLabel(info.other) }
+        return t(info.times > 1 ? 'look.why.swapMany' : 'look.why.swap', params)
+      }
       case 'share': {
         const kinds = items.filter((item) => info.counts[item])
         return kinds.length === 1
@@ -107,6 +117,12 @@ export function makeWords(items, theme) {
   function floatText(step) {
     const info = step.info
     switch (step.kind) {
+      case 'lookCompare':
+        return { left: null, right: `${info.a} − ${info.b}` }
+      case 'lookSwap': {
+        const part = info.times > 1 ? `${info.times} × ${info.value}` : `${info.value}`
+        return { swap: `${itemLabel(info.item)} → ${info.value}`, left: `− ${part}`, right: `− ${part}` }
+      }
       case 'share':
         return { left: `÷ ${info.n}`, right: `÷ ${info.n}` }
       case 'takeAway':
@@ -124,10 +140,23 @@ export function makeWords(items, theme) {
     }
   }
 
+  // 看图算：这一步要算的是什么（写在算术上面的一句问话）
+  function askText(step) {
+    const info = step.info
+    if (step.kind === 'lookCompare') return t('look.ask.compare', { extra: extraWords(info.extra) })
+    return t('look.ask.swap', { other: itemLabel(info.other) })
+  }
+
   // 一个空怎么想：只给思路，不说这个空填几
   function hintText(step, blank) {
     const info = step.info
     switch (blank.role) {
+      case 'lookDiff':
+        return t('look.hint.compare', { a: info.a, b: info.b })
+      case 'lookSwap':
+        return info.times > 1
+          ? t('look.hint.swapMany', { n: info.times, item: itemLabel(info.item), value: info.value, right: info.right })
+          : t('look.hint.swap', { right: info.right, value: info.value })
       case 'shareCount':
         return t('work.hint.shareCount', { from: blank.from, n: blank.n, item: itemLabel(blank.item) })
       case 'subCount':
@@ -174,6 +203,14 @@ export function makeWords(items, theme) {
         return t('no.subtractMore', { dst: r.dst, src: r.src, item: itemLabel(r.item) })
       case 'subtractSame':
         return t('no.subtractSame', { dst: r.dst, src: r.src })
+      case 'lookNoContain':
+        return t('no.lookNoContain', { a: r.a, b: r.b, moreA: namesOf(r.moreA), moreB: namesOf(r.moreB) })
+      case 'lookMixed':
+        return t('no.lookMixed', { big: r.big, small: r.small, extra: extraWords(r.extra) })
+      case 'lookKnown':
+        return t('no.lookKnown', { item: itemLabel(r.item), value: money(r.value) })
+      case 'lookSwapRest':
+        return t('no.lookSwapRest', { id: r.id, rest: itemsWords(r.rest) })
       default:
         return t(`no.${r.code}`)
     }
@@ -183,6 +220,10 @@ export function makeWords(items, theme) {
   function nextThink(hint) {
     const info = hint.info
     switch (hint.method) {
+      case 'lookCompare':
+        return t('look.think.compare', { big: info.big, small: info.small })
+      case 'lookSwap':
+        return t('look.think.swap', { item: itemLabel(info.item), value: money(info.value), dst: info.dst })
       case 'takeAway':
         return t('next.think.takeAway', { id: info.id, items: itemsWords(info.counts), blocks: blocksText(info.blocks) })
       case 'share': {
@@ -203,6 +244,10 @@ export function makeWords(items, theme) {
   // 下一步的提示，第二次：用哪个方法、哪架天平
   function nextDo(hint) {
     switch (hint.method) {
+      case 'lookCompare':
+        return t('look.do.compare', { big: hint.scale, small: hint.other })
+      case 'lookSwap':
+        return t('look.do.swap', { item: itemLabel(hint.item), value: money(hint.info.value), dst: hint.scale })
       case 'takeAway':
       case 'share':
         return t(`next.do.${hint.method}`, { id: hint.scale, n: hint.number })
@@ -226,6 +271,7 @@ export function makeWords(items, theme) {
     titleText,
     whyText,
     floatText,
+    askText,
     hintText,
     methodName,
     reasonText,

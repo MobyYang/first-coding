@@ -3,9 +3,11 @@
 // 每一步：第几步 + 做什么；例题里再写一句为什么；这一步的天平就画在这一步里，看算式的时候就能看到天平怎么变。
 // 前面写过的步骤一直留着，孩子能看出每一步是从哪一行来的。
 // show：例题里老师写好的；do：练习时孩子自己列的步骤，正在算的这一步留着空让孩子填，下一步在 composer 里列。
+// 看图算（第 4 课）的一步：一句问话、一道普通算术、“所以 🍎 = 4”；天平画成 LookScale（比一比时划掉一样的）。
 import { computed, nextTick, ref, watch } from 'vue'
 import BalanceScale from './BalanceScale.vue'
 import ColumnBlock from './ColumnBlock.vue'
+import LookScale from './LookScale.vue'
 import StepScale from './StepScale.vue'
 import WorkTokens from './WorkTokens.vue'
 import { t } from '../i18n.js'
@@ -44,6 +46,7 @@ function rowProps(i) {
 const showWhy = (i) => props.mode === 'show' && (props.explainAll || i === current.value)
 const showScale = (i) => props.scales && i === current.value
 const ticked = (i) => props.mode === 'do' && (i < props.upto || (i === current.value && props.finished))
+const isLook = (step) => step.kind.startsWith('look')
 
 // 新写出来的一步滚到看得见的地方
 const root = ref(null)
@@ -90,9 +93,18 @@ watch(
           <WorkTokens v-if="step.titleNumber" :tokens="[step.titleNumber]" v-bind="rowProps(i)" @pick="emit('pick', $event)" />
           <span v-if="ticked(i)" class="step-ok" aria-hidden="true">✓</span>
         </p>
-        <div class="step-body" :class="{ 'has-scale': showScale(i) }">
+        <div class="step-body" :class="{ 'has-scale': showScale(i), wide: showScale(i) && step.visual.look === 'compare' }">
+          <LookScale
+            v-if="showScale(i) && isLook(step)"
+            :key="`look-${i}`"
+            :step="step"
+            :items="work.items"
+            :theme="theme"
+            :floats="words.floatText(step)"
+            :play="mode === 'show' || finished"
+          />
           <StepScale
-            v-if="showScale(i)"
+            v-else-if="showScale(i)"
             :key="`scale-${i}`"
             :step="step"
             :items="work.items"
@@ -103,8 +115,10 @@ watch(
           <div class="step-math">
             <p v-if="showWhy(i)" class="step-why">{{ words.whyText(step) }}</p>
             <template v-for="(line, k) in step.lines" :key="k">
-              <p v-if="line.kind === 'eq'" class="line">
-                <span class="tag">{{ line.tag }}</span>
+              <p v-if="line.kind === 'ask'" class="step-ask">{{ words.askText(step) }}</p>
+              <p v-else-if="line.kind === 'eq'" class="line" :class="{ sum: !line.tag && !line.lead, so: line.lead }">
+                <span v-if="line.tag" class="tag">{{ line.tag }}</span>
+                <span v-if="line.lead" class="lead">{{ t('look.so') }}</span>
                 <WorkTokens :tokens="line.tokens" v-bind="rowProps(i)" @pick="emit('pick', $event)" />
               </p>
               <ColumnBlock v-else :line="line" :items="work.items" v-bind="rowProps(i)" @pick="emit('pick', $event)" />
@@ -259,12 +273,17 @@ watch(
   gap: 10px;
   align-items: start;
 }
-.step-body.has-scale .step-scale {
+.step-body.has-scale .step-scale,
+.step-body.has-scale .look-scale {
   width: min(320px, 100%);
   justify-self: center;
 }
+/* 比一比：两架天平并排，画得宽一点，算式写在下面 */
+.step-body.wide .look-scale {
+  width: min(600px, 100%);
+}
 @media (min-width: 760px) {
-  .step-body.has-scale {
+  .step-body.has-scale:not(.wide) {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   }
 }
@@ -291,6 +310,22 @@ watch(
   gap: 10px;
   font-size: clamp(1.25rem, 3vw, 1.55rem);
   font-weight: 600;
+}
+/* 看图算：问一句，算一道，所以…… */
+.step-ask {
+  margin: 0;
+  font-size: clamp(1.15rem, 2.8vw, 1.35rem);
+  font-weight: 700;
+  color: var(--teal);
+}
+.line.sum {
+  font-size: clamp(1.45rem, 3.6vw, 1.8rem);
+  padding-left: 4px;
+}
+.lead {
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 .tag,
 .scale-tag {
