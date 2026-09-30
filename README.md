@@ -61,6 +61,10 @@ npm run build    # 打包成一个独立的 dist/index.html，双击就能打开
    已经录好的不会重录；改了讲解的文字，再运行一次就只录改了的那几段。
 4. 把 `public/voice/` 和 `src/voice-manifest.json` 提交上去。
 
+**在手机上也能录（用 GitHub 的服务器）**：
+1. 仓库 **Settings → Secrets and variables → Actions → New repository secret**，名字写 `DOUBAO_API_KEY`，值填 key。
+2. 仓库 **Actions** 页选 **Record teacher voice**，点 **Run workflow**。GitHub 录好以后把录音存进仓库，再重新发布网站。
+
 可选：`DOUBAO_VOICE` 换音色（默认 `zh_female_xiaohe_uranus_bigtts` 小何 2.0），`DOUBAO_SPEECH_RATE` 调语速（-50 到 100，默认 -10，慢一点）。
 自己复刻的音色（`S_` 开头）会自动用 `seed-icl-2.0`。用旧版控制台的 App ID 和 Access Token 也可以：放进 `DOUBAO_APP_ID` 和 `DOUBAO_ACCESS_TOKEN`。
 

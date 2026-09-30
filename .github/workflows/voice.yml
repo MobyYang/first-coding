@@ -1,0 +1,76 @@
+# 用豆包语音录老师讲解（在 GitHub 的服务器上录，手机上就能操作）：
+# 1. 仓库 Settings → Secrets and variables → Actions → New repository secret，名字 DOUBAO_API_KEY，值填豆包语音的 API Key
+# 2. Actions 页选 “Record teacher voice”，点 Run workflow
+# 录好的 mp3 存进仓库（public/voice/ 和 src/voice-manifest.json），然后重新发布网站。key 只从 secret 读，不会出现在记录里。
+# 没录完（比如被限流）也会先把录好的存下来；再运行一次，只录还没录好的。
+name: Record teacher voice
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    outputs:
+      voice: ${{ steps.record.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Record with Doubao TTS
+        id: record
+        continue-on-error: true
+        env:
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+        run: npm run voice
+      - name: Save the recordings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/voice src/voice-manifest.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "录音没有变化"
+          else
+            git commit -m "录好老师讲解的声音（豆包语音）"
+            git push
+          fi
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: record
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # 有没录好的，最后标成失败，原因看 “Record with Doubao TTS” 这一步
+  result:
+    needs: [record, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ needs.record.outputs.voice }}" != "success" ]; then
+            echo "有的录音没录好：打开 record → Record with Doubao TTS 看原因。录好的已经存进仓库，再运行一次只录剩下的。"
+            exit 1
+          fi
+          echo "老师讲解全部录好，网站已经更新。"
