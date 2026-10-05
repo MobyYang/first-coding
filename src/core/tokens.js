@@ -2,11 +2,13 @@
 //   { type: 'item', item, count, blank? }  2🍎（有 blank：个数要孩子填）
 //   { type: 'op', text }                   + − × ÷ = ( )
 //   { type: 'num', value, blank? }         一个数（有 blank：要孩子填）
+//   { type: 'num', value, mark: true }     代进去的数：标成绿色，不用孩子填
 //   { type: 'ref', of, value }             和同一步里那个空是同一个数，孩子填了才显示
 // 一行算式：{ kind: 'eq', tag, tokens }
 // 竖式：{ kind: 'column', op: '+' | '−', rows: [{ tag, counts, right }], result: { tag, counts, countBlanks, right } }
 export const op = (text) => ({ type: 'op', text })
 export const num = (value, blank) => (blank ? { type: 'num', value, blank } : { type: 'num', value })
+export const marked = (value) => ({ type: 'num', value, mark: true })
 export const ref = (of, value) => ({ type: 'ref', of, value })
 export const term = (item, count, blank) => (blank ? { type: 'item', item, count, blank } : { type: 'item', item, count })
 
@@ -14,7 +16,7 @@ export const term = (item, count, blank) => (blank ? { type: 'item', item, count
 export const plain = (tokens) =>
   tokens.map((tok) => {
     if (tok.type === 'ref') return num(tok.value)
-    if (!tok.blank) return tok
+    if (!tok.blank && !tok.mark) return tok
     return tok.type === 'item' ? term(tok.item, tok.count) : num(tok.value)
   })
 

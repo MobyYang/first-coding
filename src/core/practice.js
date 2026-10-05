@@ -5,7 +5,7 @@
 import { checkWithAnswer } from './explain.js'
 import { discovered, getScale, isSolved, makeScale, nextScaleId, shareFactor } from './scale.js'
 import { nextMove } from './solver.js'
-import { eq, inParens, leftTokens, num, op, plain, term, joinPlus } from './tokens.js'
+import { eq, inParens, leftTokens, marked, num, op, plain, term, joinPlus } from './tokens.js'
 
 // 孩子能选的方法（按课本的顺序）
 export const METHODS = ['share', 'takeAway', 'substitute', 'subtract', 'add']
@@ -155,7 +155,7 @@ export function planStep(state, choice) {
       })
     }
 
-    // 把 🍎 = 5 代入 B：B 上的 🍎 换成 5
+    // 把 🍎 = 5 代入 B：B 上的 🍎 换成 5，直接写成 5 + 🍌 = 8。换上去的数就是刚算出来的，不用再填
     case 'substitute': {
       const found = foundList(state)
       if (!found.length) return fail('subNothing')
@@ -170,7 +170,7 @@ export function planStep(state, choice) {
       const after = { ...x, counts, blocks: [...x.blocks, ...Array(n).fill(f.value)] }
       const swapped = display[x.id].flatMap((tok) => {
         if (tok.type !== 'item' || tok.item !== f.item) return [tok]
-        return tok.count === 1 ? [num(f.value, 'v')] : [num(tok.count), op('×'), num(f.value, 'v')]
+        return tok.count === 1 ? [marked(f.value)] : [num(tok.count), op('×'), marked(f.value)]
       })
       return step(state, {
         kind: 'swapKnown',
@@ -178,8 +178,8 @@ export function planStep(state, choice) {
         after,
         info: { src: f.scaleId, dst: x.id, item: f.item, value: f.value, times: n },
         titleNumber: null,
-        lines: [eq(x.id, display[x.id], [num(x.right)]), eq(x.id, swapped, [num(x.right)])],
-        blanks: [{ id: 'v', value: f.value, role: 'swapValue' }],
+        lines: [eq(x.id, swapped, [num(x.right)])],
+        blanks: [],
         display: plain(swapped),
       })
     }

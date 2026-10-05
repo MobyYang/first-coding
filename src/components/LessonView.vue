@@ -179,9 +179,14 @@ function confirmStep() {
     showMessage()
     return
   }
-  play('move')
   planned.value = res.step
   message.value = null
+  // 这一步没有要算的数（代入：换上去的就是刚算出来的数），写出来就对了
+  if (!res.step.blanks.length) {
+    finishStep()
+    return
+  }
+  play('move')
   tip.value = { text: t('compose.compute'), mood: 'think' }
 }
 

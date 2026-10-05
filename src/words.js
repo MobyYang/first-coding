@@ -169,8 +169,6 @@ export function makeWords(items, theme) {
         return t('work.hint.minus', { total: info.total, amount: info.amount })
       case 'diff':
         return t('work.hint.diff', { big: info.big, small: info.small })
-      case 'swapValue':
-        return t('work.hint.swapValue', { item: itemLabel(info.item) })
       default:
         return t('work.hint.sum', { ra: info.ra, rb: info.rb })
     }
