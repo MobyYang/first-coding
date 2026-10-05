@@ -164,7 +164,6 @@ const zh = {
   'work.hint.divide': '{total} ÷ {n} = ?　想一想：{n} × ? = {total}',
   'work.hint.minus': '{total} − {amount} = ?',
   'work.hint.diff': '{big} − {small} = ?',
-  'work.hint.swapValue': '{item} 等于多少？看上面算出来的那一行。',
   'work.hint.sum': '{ra} + {rb} = ?',
 
   // 老师讲例题时说的话（narration.js），读之前把算式说成话
@@ -391,7 +390,6 @@ const en = {
   'work.hint.divide': '{total} ÷ {n} = ?  Think: {n} × ? = {total}',
   'work.hint.minus': '{total} − {amount} = ?',
   'work.hint.diff': '{big} − {small} = ?',
-  'work.hint.swapValue': 'What is {item}? Look at the line where you worked it out.',
   'work.hint.sum': '{ra} + {rb} = ?',
 
   'say.problem': 'First, the problem.',

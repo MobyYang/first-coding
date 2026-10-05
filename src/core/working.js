@@ -3,7 +3,7 @@
 // 前面写过的步骤一直留着；标了 blank 的数是这一步算出来的，例题里用绿色标出。
 import { checkWithAnswer, explainPuzzle } from './explain.js'
 import { getScale } from './scale.js'
-import { eq, inParens, joinPlus, leftTokens, num, op, plain, ref, term } from './tokens.js'
+import { eq, inParens, joinPlus, leftTokens, marked, num, op, plain, ref, term } from './tokens.js'
 
 // display：每架天平现在写成什么样（代入以后写成 4 + 🍌，后面接着这样写）
 function buildStep(items, step, before, display) {
@@ -75,25 +75,24 @@ function buildStep(items, step, before, display) {
       }
     }
 
-    // 把 🍎 = 4 代入 C：🍎 + 🍌 = 9 → 4 + 🍌 = 9（换掉的东西写在原来的位置上）
+    // 把 🍎 = 4 代入 C：直接写成 4 + 🍌 = 9（换掉的东西写在原来的位置上，不再先抄一遍 🍎 + 🍌 = 9）
     case 'swapKnown': {
       const target = getScale(before, step.dst)
-      const current = display[step.dst]
-      const swapped = current.flatMap((tok) => {
+      const swapped = display[step.dst].flatMap((tok) => {
         if (tok.type !== 'item' || tok.item !== step.item) return [tok]
-        return tok.count === 1 ? [num(step.value, 'v')] : [num(tok.count), op('×'), num(step.value, 'v')]
+        return tok.count === 1 ? [marked(step.value)] : [num(tok.count), op('×'), marked(step.value)]
       })
       display[step.dst] = plain(swapped)
       return {
         scaleId: step.dst,
         info: { src: step.src, dst: step.dst, item: step.item, value: step.value, times: target.counts[step.item] },
         titleNumber: null,
-        lines: [eq(step.dst, current, [num(target.right)]), eq(step.dst, swapped, [num(target.right)])],
-        blanks: [{ id: 'v', value: step.value, role: 'swapValue' }],
+        lines: [eq(step.dst, swapped, [num(target.right)])],
+        blanks: [],
       }
     }
 
-    // 把（x + y）= 9 代入 B：3x + 2y = 22 → x + (x + y) + (x + y) = 22 → x + 9 + 9 = 22
+    // 把（x + y）= 9 代入 B：先圈出 x + (x + y) + (x + y) = 22，再写成 x + 9 + 9 = 22
     case 'swapBundle': {
       const target = getScale(before, step.dst)
       const rest = { ...target.counts }
@@ -101,10 +100,9 @@ function buildStep(items, step, before, display) {
       const terms = items.filter((item) => rest[item] > 0).map((item) => term(item, rest[item]))
       const blocks = target.blocks.map((w) => num(w))
       const sets = Array.from({ length: step.times }, () => [op('('), ...leftTokens(items, step.group), op(')')])
-      const values = Array.from({ length: step.times }, (_, k) => (k === 0 ? num(step.value, 'v') : ref('v', step.value)))
+      const values = Array.from({ length: step.times }, () => marked(step.value))
       const swapped = joinPlus([...terms, ...values, ...blocks])
       const lines = [
-        eq(step.dst, display[step.dst], [num(target.right)]),
         eq(step.dst, joinPlus([...terms, ...sets, ...blocks]), [num(target.right)]),
         eq(step.dst, swapped, [num(target.right)]),
       ]
@@ -114,7 +112,7 @@ function buildStep(items, step, before, display) {
         info: { src: step.src, dst: step.dst, group: step.group, times: step.times, value: step.value },
         titleNumber: null,
         lines,
-        blanks: [{ id: 'v', value: step.value, role: 'bundleValue' }],
+        blanks: [],
       }
     }
 

@@ -65,7 +65,7 @@ const isBlank = (tok) => props.mode === 'do' && tok.blank
         {{ values[tok.of] ?? '?' }}
       </span>
 
-      <span v-else class="tok-num" :class="{ worked: tok.blank }">{{ tok.value }}</span>
+      <span v-else class="tok-num" :class="{ worked: tok.blank || tok.mark }">{{ tok.value }}</span>
     </template>
   </span>
 </template>

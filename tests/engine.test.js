@@ -258,7 +258,10 @@ function expectWorking(puzzle, lesson) {
       ids.add(line.result.right.blank)
       for (const id of Object.values(line.result.countBlanks)) ids.add(id)
     }
-    expect(step.blanks.length).toBeGreaterThan(0)
+    // 代入直接写成代入以后的样子，没有要算的数；别的每一步都有要算的数
+    const swapping = step.kind === 'swapKnown' || step.kind === 'swapBundle'
+    expect(step.blanks.length > 0).toBe(!swapping)
+    if (swapping) expect(step.lines.at(-1).tokens.some((tok) => tok.mark)).toBe(true)
     expect(step.blanks.map((b) => b.id).sort()).toEqual([...ids].sort())
     for (const blank of step.blanks) {
       expect(Number.isInteger(blank.value)).toBe(true)
@@ -307,16 +310,19 @@ describe('working (演算)', () => {
     })
   }
 
-  it('writes both sides of every step, and substitutes in place', () => {
+  it('writes both sides of every step, and substitutes straight away', () => {
     const { lesson, puzzle } = exampleOf('3')
     const work = buildWorking(puzzle, lesson.tools)
     expect(work.given.map((row) => tokensText(row.tokens))).toEqual(['2apple = 10', 'apple + banana = 8'])
     expect(work.steps.map(linesText)).toEqual([
       ['A: 2apple ÷ 2 = 10 ÷ 2', 'A: apple = 5'],
-      ['B: apple + banana = 8', 'B: 5 + banana = 8'],
+      ['B: 5 + banana = 8'],
       ['B: 5 + banana − 5 = 8 − 5', 'B: banana = 3'],
     ])
-    expect(work.steps.map((step) => step.blanks.map((b) => `${b.id}=${b.value}`))).toEqual([['n=2', 'r=5'], ['v=5'], ['a=5', 'r=3']])
+    expect(work.steps.map((step) => step.blanks.map((b) => `${b.id}=${b.value}`))).toEqual([['n=2', 'r=5'], [], ['a=5', 'r=3']])
+    // 代进去的 5 标出来（绿色），后面的步骤里就是普通的数
+    expect(work.steps[1].lines[0].tokens.find((tok) => tok.type === 'num' && tok.value === 5)).toMatchObject({ mark: true })
+    expect(work.steps[2].lines[0].tokens.some((tok) => tok.mark)).toBe(false)
   })
 
   it('adds and subtracts two scales in columns', () => {
@@ -326,7 +332,7 @@ describe('working (演算)', () => {
       ['A + B: 3apple + 3banana = 27'],
       ['C: ( 3apple + 3banana ) ÷ 3 = 27 ÷ 3', 'C: apple + banana = 9'],
       ['A − C: apple = 4'],
-      ['C: apple + banana = 9', 'C: 4 + banana = 9'],
+      ['C: 4 + banana = 9'],
       ['C: 4 + banana − 4 = 9 − 4', 'C: banana = 5'],
     ])
     expect(work.steps[0].blanks.map((b) => b.id)).toEqual(['c-apple', 'c-banana', 'r'])
@@ -338,7 +344,7 @@ describe('working (演算)', () => {
     const work = buildWorking({ items: ['apple', 'banana'], board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
     expect(work.steps.map(linesText)).toEqual([
       ['A: 3apple ÷ 3 = 12 ÷ 3', 'A: apple = 4'],
-      ['B: 2apple + banana = 13', 'B: 2 × 4 + banana = 13'],
+      ['B: 2 × 4 + banana = 13'],
       ['B: 2 × 4 + banana − 8 = 13 − 8', 'B: banana = 5'],
     ])
   })
@@ -347,7 +353,7 @@ describe('working (演算)', () => {
     const board = makeBoard(['apple', 'banana'], [makeScale('A', { apple: 1, banana: 1 }, 9), makeScale('B', { apple: 3, banana: 2 }, 22)])
     const work = buildWorking({ items: ['apple', 'banana'], board, answer: { apple: 4, banana: 5 } }, ['share', 'takeAway', 'swap'])
     expect(work.steps.map(linesText).slice(0, 2)).toEqual([
-      ['B: 3apple + 2banana = 22', 'B: apple + ( apple + banana ) + ( apple + banana ) = 22', 'B: apple + 9 + 9 = 22'],
+      ['B: apple + ( apple + banana ) + ( apple + banana ) = 22', 'B: apple + 9 + 9 = 22'],
       ['B: apple + 9 + 9 − 18 = 22 − 18', 'B: apple = 4'],
     ])
   })
@@ -432,6 +438,16 @@ describe('practice: the child writes every step', () => {
     expect(reasonOf(same, { method: 'subtract', scale: 'A', other: 'B' })).toBe('subtractSame')
     const withWeight = pair({ counts: { apple: 1, banana: 1 }, right: 9 }, { counts: { apple: 2, banana: 1 }, blocks: [2], right: 15 })
     expect(reasonOf(withWeight, { method: 'subtract', scale: 'B', other: 'A' })).toBe('columnBlocks')
+  })
+
+  it('writes a substitution straight away, with nothing to fill in', () => {
+    const board = pair({ counts: { apple: 2 }, right: 10 }, { counts: { apple: 1, banana: 1 }, right: 8 })
+    const shared = planStep(startPractice({ board }), { method: 'share', scale: 'A', number: 2 }).step.next
+    const res = planStep(shared, { method: 'substitute', scale: 'B', item: 'apple' })
+    expect(res.ok).toBe(true)
+    expect(res.step.lines.map((line) => tokensText(line.tokens))).toEqual(['5 + banana = 8'])
+    expect(res.step.blanks).toEqual([])
+    expect(res.step.lines[0].tokens[0]).toMatchObject({ value: 5, mark: true })
   })
 
   it('lets the child take a different road, and still helps from where the child is', () => {
