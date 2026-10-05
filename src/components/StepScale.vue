@@ -4,6 +4,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BalanceScale from './BalanceScale.vue'
 import { t } from '../i18n.js'
+import { play, soundOf } from '../sound.js'
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -28,6 +29,9 @@ function run(delay) {
   timer = setTimeout(() => {
     changed.value = true
     event.value = { kind: props.step.kind, scaleIds: [props.step.visual.after.id], key: Date.now(), ...props.floats }
+    // 天平怎么变，就响这个方法的声音；这一步算出了一样东西，再响一声
+    play(soundOf(props.step.kind))
+    if (props.step.found) play('found', 0.45)
   }, delay)
 }
 

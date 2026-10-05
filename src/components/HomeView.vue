@@ -20,7 +20,7 @@ const examples = Object.fromEntries(
 )
 
 function open(lesson) {
-  play('tap')
+  play('select')
   emit('open', lesson.id)
 }
 

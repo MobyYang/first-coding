@@ -16,14 +16,14 @@ const text = ref(props.initial == null ? '' : String(props.initial))
 let replace = props.initial != null
 
 function press(digit) {
-  play('tap')
+  play('key')
   if (replace || text.value.length >= 2) text.value = ''
   replace = false
   text.value = text.value === '0' ? String(digit) : text.value + digit
 }
 
 function back() {
-  play('tap')
+  play('back')
   replace = false
   text.value = text.value.slice(0, -1)
 }

@@ -109,7 +109,7 @@ src/
 ├── voice-manifest.json 录好了哪些话（npm run voice 生成）
 ├── items.js           水果、零食和字母
 ├── i18n.js            中英文文字
-├── sound.js           用 Web Audio 合成的音效
+├── sound.js           用 Web Audio 合成的音效：每种方法一个声音，写出来、擦掉、提示、翻页、填对、算错、算出来、做完一题各有声音
 └── store.js           学习记录（只存在本机浏览器里）
 public/voice/          老师讲解的录音（npm run voice 生成）
 scripts/make-voice.mjs 用豆包语音录老师讲解

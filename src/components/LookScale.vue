@@ -6,6 +6,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BalanceScale from './BalanceScale.vue'
 import { t } from '../i18n.js'
+import { play } from '../sound.js'
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -31,6 +32,12 @@ function show(next, floats) {
   stage.value = next
   const scale = next === 2 ? visual.value.after : visual.value.mid
   event.value = floats ? { kind: props.step.kind, scaleIds: [scale.id], key: Date.now(), ...floats } : null
+  // 声音跟着天平变：东西变成砝码“翻一下”，两边拿走砝码“往上一提”，比出多出来的“比一比”，最后“算出来了”
+  if (next === 1) play('swap')
+  if (next === 2) {
+    play(visual.value.look === 'swap' ? 'takeAway' : 'compare')
+    play('found', 0.45)
+  }
 }
 
 function run(fromStart) {
