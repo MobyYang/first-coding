@@ -9,7 +9,7 @@ import { bankOf } from '../store.js'
 const emit = defineEmits(['open', 'back'])
 
 function open(lesson) {
-  play('tap')
+  play('select')
   emit('open', lesson.id)
 }
 </script>

@@ -18,7 +18,7 @@ import { starsFor } from '../core/lessons.js'
 import { randomSeed } from '../core/random.js'
 import { engineFor, exampleWorking } from '../core/styles.js'
 import { t, template } from '../i18n.js'
-import { play } from '../sound.js'
+import { play, soundOf } from '../sound.js'
 import { progress, recordBank, recordLesson } from '../store.js'
 import { say, stopVoice, toggleVoice } from '../voice.js'
 import { makeWords } from '../words.js'
@@ -134,7 +134,7 @@ async function showMessage() {
 
 // —— 列步骤：选方法、点天平、写数 ——
 function chooseMethod(method) {
-  play('tap')
+  play(soundOf(method))
   resetChoice()
   choice.method = method
   if (lines.value.length === 1) choice.scale = lines.value[0].scale.id
@@ -145,7 +145,7 @@ function chooseMethod(method) {
 }
 
 function pickScale(id) {
-  play('tap')
+  play('select')
   if (['subtract', 'add', 'lookCompare'].includes(choice.method)) {
     choice[gap.value] = id
     gap.value = gap.value === 'scale' ? 'other' : 'scale'
@@ -159,7 +159,7 @@ function pickGap(name) {
 }
 
 function pickItem(item) {
-  play('tap')
+  play('select')
   choice.item = item
 }
 
@@ -174,19 +174,19 @@ function confirmStep() {
   if (!res.ok) {
     mistakes.value = true
     message.value = { text: words.value.reasonText(res.reason), mood: 'oops' }
-    play('wrong')
+    play('nope')
     say(message.value.text)
     showMessage()
     return
   }
   planned.value = res.step
   message.value = null
+  play('write')
   // 这一步没有要算的数（代入：换上去的就是刚算出来的数），写出来就对了
   if (!res.step.blanks.length) {
     finishStep()
     return
   }
-  play('move')
   tip.value = { text: t('compose.compute'), mood: 'think' }
 }
 
@@ -219,11 +219,11 @@ function enter(value) {
   }
   values[blank.id] = value
   delete wrong[blank.id]
+  play('right')
   const rest = planned.value.blanks.find((b) => values[b.id] !== b.value)
   if (rest) {
     // 这一步还有数要算：键盘接着填下一个
     pad.value = { kind: 'blank', id: rest.id }
-    play('tap')
     return
   }
   finishStep()
@@ -233,7 +233,6 @@ function enter(value) {
 function finishStep() {
   finished.value = true
   tip.value = engine.solved(planned.value.next) ? null : { text: t('compose.stepRight'), mood: 'happy' }
-  play('move')
   clearTimeout(pause)
   pause = setTimeout(commitStep, STEP_PAUSE)
 }
@@ -255,7 +254,7 @@ function commitStep() {
     if (!mistakes.value && !helped.value) firstTry.value++
     doneCount.value++
     if (props.bank) recordBank(props.lesson.id, !mistakes.value && !helped.value)
-    play('solved')
+    play(!mistakes.value && !helped.value ? 'perfect' : 'solved')
     say(doneText.value)
     confetti.value?.fire()
     return
@@ -266,7 +265,7 @@ function commitStep() {
 // —— 擦掉一步：正在算的这一步，或者上一步 ——
 function undo() {
   if (!canUndo.value) return
-  play('tap')
+  play('erase')
   if (planned.value) {
     planned.value = null
     clear(values)
@@ -284,7 +283,7 @@ function undo() {
 // —— 提示：列步骤时，第一次问下一步怎么想，第二次说用哪个方法；算结果时只说这个数怎么算 ——
 function hint() {
   if (solved.value || finished.value) return
-  play('tap')
+  play('hint')
   helped.value = true
   if (planned.value) {
     const id = Object.keys(wrong)[0] ?? nextBlank.value
@@ -304,7 +303,7 @@ function hint() {
 }
 
 function openExample() {
-  play('tap')
+  play('page')
   showExample.value = true
 }
 
@@ -314,14 +313,14 @@ function nextProblem() {
     problems.value = [...problems.value, newProblem()]
     index.value++
     resetProblem()
-    play('tap')
+    play('page')
     window.scrollTo({ top: 0 })
     return
   }
   if (index.value < problems.value.length - 1) {
     index.value++
     resetProblem()
-    play('tap')
+    play('page')
     window.scrollTo({ top: 0 })
     return
   }

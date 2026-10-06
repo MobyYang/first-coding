@@ -30,18 +30,18 @@ const done = computed(() => page.value > total)
 function next() {
   if (done.value) return
   page.value++
-  play(done.value ? 'found' : 'move')
+  play(done.value ? 'solved' : 'page')
 }
 
 function prev() {
   if (page.value === 0) return
   page.value--
-  play('tap')
+  play('page')
 }
 
 function replay() {
   page.value = 0
-  play('tap')
+  play('page')
 }
 
 // 老师读这一页；翻页、打开老师讲解时都读
