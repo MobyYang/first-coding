@@ -1,5 +1,5 @@
 <script setup>
-// 孩子自己列一步：先想这一步做什么，选一个方法；再点天平、写上数，点“写出来”。
+// 孩子自己列一步：先想这一步做什么，选一个方法；再点天平、写上数，选完整了就自动写出来。
 // 选的这一步能不能这样做由上一层检查：不能做就在这里说为什么（不替孩子选），能做就写进演算纸。
 // 提示也写在这里（先问怎么想，再说用哪个方法），就在孩子正在看的地方。
 import { computed } from 'vue'
@@ -20,19 +20,12 @@ const props = defineProps({
   words: { type: Object, required: true },
   message: { type: Object, default: null }, // { text, mood }：提示，或者为什么不能这样做
 })
-const emit = defineEmits(['method', 'scale', 'gap', 'item', 'number', 'confirm'])
+const emit = defineEmits(['method', 'scale', 'gap', 'item', 'number'])
 
 // 两架天平的方法（比一比不分先后）；要用算出来的数的方法（代入、换一换）
 const two = computed(() => ['subtract', 'add', 'lookCompare'].includes(props.choice.method))
 const usesValue = computed(() => ['substitute', 'lookSwap'].includes(props.choice.method))
 const chosenValue = computed(() => props.found.find((f) => f.item === props.choice.item))
-const ready = computed(() => {
-  const c = props.choice
-  if (c.method === 'share' || c.method === 'takeAway') return Boolean(c.scale && c.number)
-  if (usesValue.value) return Boolean(c.item && c.scale)
-  if (two.value) return Boolean(c.scale && c.other)
-  return false
-})
 
 // 这一步写成一句话，{scale}、{number} 这些地方是可以点的空
 const sentence = computed(() => {
@@ -135,9 +128,6 @@ const picked = (id) => props.choice.scale === id || props.choice.other === id
 
     <p v-if="message" class="composer-message" :class="`mood-${message.mood}`">🦉 {{ message.text }}</p>
 
-    <div v-if="choice.method" class="composer-actions">
-      <button type="button" class="btn btn-primary" :disabled="!ready" @click="emit('confirm')">✓ {{ t('compose.write') }}</button>
-    </div>
   </section>
 </template>
 
@@ -303,10 +293,5 @@ button.gap {
 }
 .composer-message.mood-happy {
   color: var(--leaf);
-}
-.composer-actions {
-  display: flex;
-  justify-content: flex-end;
-  scroll-margin: 90px 0 110px; /* 滚过来时别被底下的按钮挡住 */
 }
 </style>

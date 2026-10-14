@@ -102,6 +102,7 @@ function resetChoice() {
 
 function resetProblem() {
   clearTimeout(pause)
+  clearTimeout(autoWrite)
   states.value = [engine.start(problem.value)]
   history.value = []
   planned.value = null
@@ -125,14 +126,36 @@ async function goPractice() {
   say(message.value.text)
 }
 
-// 列步骤那里出了话（提示、为什么不能这样做），滚到看得见“写出来”的地方
+// 列步骤那里出了话（提示、为什么不能这样做），滚到看得见这句话的地方
 async function showMessage() {
   await nextTick()
-  const el = document.querySelector('.composer .composer-actions') || document.querySelector('.composer .composer-message')
+  const el = document.querySelector('.composer .composer-message')
   el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 }
 
 // —— 列步骤：选方法、点天平、写数 ——
+const TWO_SCALES = ['subtract', 'add', 'lookCompare'] // 要点两架天平的方法
+
+// 这一步选完整了没有：方法、天平（两架）、要写的数、要代入的数
+function choiceReady() {
+  const c = choice
+  if (c.method === 'share' || c.method === 'takeAway') return Boolean(c.scale && c.number)
+  // 还一样都没算出来时点了天平，也“写”一下，好告诉孩子为什么不行
+  if (c.method === 'substitute' || c.method === 'lookSwap') return Boolean(c.scale && (c.item || !found.value.length))
+  if (TWO_SCALES.includes(c.method)) return Boolean(c.scale && c.other)
+  return false
+}
+
+// 选完整了就自动写出来，不用再点按钮；停一下，让孩子看到刚点的那架天平选上了
+let autoWrite = 0
+function writeWhenReady() {
+  clearTimeout(autoWrite)
+  if (!choiceReady()) return
+  autoWrite = setTimeout(() => {
+    if (choiceReady() && !planned.value && !solved.value) confirmStep()
+  }, 350)
+}
+
 function chooseMethod(method) {
   play(soundOf(method))
   resetChoice()
@@ -142,16 +165,18 @@ function chooseMethod(method) {
   if (method === 'lookCompare' && lines.value.length === 2) Object.assign(choice, { scale: lines.value[0].scale.id, other: lines.value[1].scale.id })
   if ((method === 'substitute' || method === 'lookSwap') && found.value.length === 1) choice.item = found.value[0].item
   message.value = null
+  writeWhenReady()
 }
 
 function pickScale(id) {
   play('select')
-  if (['subtract', 'add', 'lookCompare'].includes(choice.method)) {
+  if (TWO_SCALES.includes(choice.method)) {
     choice[gap.value] = id
     gap.value = gap.value === 'scale' ? 'other' : 'scale'
   } else {
     choice.scale = id
   }
+  writeWhenReady()
 }
 
 function pickGap(name) {
@@ -161,6 +186,7 @@ function pickGap(name) {
 function pickItem(item) {
   play('select')
   choice.item = item
+  writeWhenReady()
 }
 
 function openNumber() {
@@ -168,13 +194,17 @@ function openNumber() {
   pad.value = { kind: 'number' }
 }
 
-// 写出来：能这样做就写进演算纸，不能就说为什么
+// 写出来（选完整了自动写）：能这样做就写进演算纸，不能就说为什么
 function confirmStep() {
+  clearTimeout(autoWrite)
   const res = engine.plan(state.value, choice)
   if (!res.ok) {
     mistakes.value = true
     message.value = { text: words.value.reasonText(res.reason), mood: 'oops' }
     play('nope')
+    // 两架天平的方法：这两架不行，两架都重新点
+    if (TWO_SCALES.includes(choice.method)) Object.assign(choice, { scale: null, other: null })
+    gap.value = 'scale'
     say(message.value.text)
     showMessage()
     return
@@ -205,6 +235,7 @@ function enter(value) {
   if (value == null || !target) return
   if (target.kind === 'number') {
     choice.number = value
+    writeWhenReady()
     return
   }
   const blank = planned.value?.blanks.find((b) => b.id === target.id)
@@ -271,6 +302,7 @@ function undo() {
     clear(values)
     clear(wrong)
     tip.value = null
+    resetChoice()
   } else {
     history.value = history.value.slice(0, -1)
     states.value = states.value.slice(0, -1)
@@ -338,6 +370,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimeout(pause)
+  clearTimeout(autoWrite)
   stopVoice()
 })
 
@@ -451,7 +484,6 @@ const eyebrow = computed(() => {
             @gap="pickGap"
             @item="pickItem"
             @number="openNumber"
-            @confirm="confirmStep"
           />
         </template>
       </WorkSheet>
